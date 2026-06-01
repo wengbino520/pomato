@@ -1,0 +1,23 @@
+# Virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# User data
+~/.pomato/
+
+# IDE
+.vscode/
+.idea/
+
+# Build / dist
+dist/
+build/
+*.spec
+
+# Env / secrets
+.env
+*.env

@@ -1,0 +1,83 @@
+from datetime import date
+
+from openai import OpenAI
+
+DEFAULT_SYSTEM_PROMPT = """\
+你是一个专业的工作日报助手。请根据用户提供的番茄钟记录，生成一份结构化、专业的工作日报。
+
+要求：
+1. 按工作类型分类汇总（如开发、测试、会议、文档等）
+2. 提炼关键工作成果，去除重复内容
+3. 语言简洁专业
+4. 在末尾附上今日工作统计（番茄钟数量、专注时长）
+5. 输出 Markdown 格式
+
+注意：跳过或内容为空的记录请忽略。\
+"""
+
+
+def build_prompt(entries: list[dict], report_date: str | None = None) -> str:
+    if not report_date:
+        report_date = date.today().strftime("%Y年%m月%d日")
+
+    valid = [e for e in entries if not e.get("skipped") and e.get("content")]
+
+    lines = [f"日期：{report_date}", "", "番茄钟记录："]
+    for e in valid:
+        tags = ", ".join(e.get("tags") or [])
+        tag_str = f"[{tags}] " if tags else ""
+        lines.append(
+            f"- {e['start_time'][:5]}-{e['end_time'][:5]} · {tag_str}{e['content']}"
+        )
+
+    lines.append(
+        f"\n共完成 {len(valid)} 个番茄钟，约 {len(valid) * 25} 分钟专注工作。"
+    )
+    return "\n".join(lines)
+
+
+class AIClient:
+    def __init__(self, config):
+        self.config = config
+
+    def generate_report(
+        self,
+        entries: list[dict],
+        report_date: str | None = None,
+        on_chunk=None,
+    ) -> str:
+        api_key = self.config.get("api_key", "")
+        base_url = self.config.get("api_base_url", "https://api.openai.com/v1")
+        model = self.config.get("api_model", "gpt-4o-mini")
+
+        if not api_key:
+            raise ValueError("请先在设置中配置 API Key")
+
+        client = OpenAI(api_key=api_key, base_url=base_url)
+        prompt = build_prompt(entries, report_date)
+        messages = [
+            {"role": "system", "content": DEFAULT_SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ]
+
+        if on_chunk:
+            chunks: list[str] = []
+            stream = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                stream=True,
+                temperature=0.7,
+            )
+            for chunk in stream:
+                delta = chunk.choices[0].delta.content or ""
+                if delta:
+                    chunks.append(delta)
+                    on_chunk(delta)
+            return "".join(chunks)
+
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.7,
+        )
+        return response.choices[0].message.content
