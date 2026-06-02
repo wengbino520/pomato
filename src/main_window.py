@@ -1,6 +1,7 @@
 from datetime import date
 
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -422,7 +423,7 @@ class MainWindow(QMainWindow):
         self.db.add_entry(today, session_no, start, end, content, selected_tags, skipped=False)
         self.refresh()
 
-    def closeEvent(self, a0):
+    def closeEvent(self, event: QCloseEvent):
         # Hide to tray instead of quitting
-        a0.ignore()
+        event.ignore()
         self.hide()
