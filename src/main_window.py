@@ -1,6 +1,6 @@
 from datetime import date
 
-from PyQt6.QtCore import Qt, QTime, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
-    QTimeEdit,
+    QSpinBox,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -66,19 +66,38 @@ class AddEntryDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        self.start_time = QTimeEdit()
-        self.start_time.setDisplayFormat("HH:mm")
-        self.start_time.setTime(QTime(9, 0))
-        self.end_time = QTimeEdit()
-        self.end_time.setDisplayFormat("HH:mm")
-        self.end_time.setTime(QTime(9, 25))
+        self.start_hour = QSpinBox()
+        self.start_hour.setRange(0, 23)
+        self.start_hour.setValue(9)
+        self.start_hour.setSuffix(" 时")
+        self.start_hour.setFixedWidth(90)
+
+        self.start_minute = QSpinBox()
+        self.start_minute.setRange(0, 59)
+        self.start_minute.setValue(0)
+        self.start_minute.setSuffix(" 分")
+        self.start_minute.setFixedWidth(90)
+
+        self.end_hour = QSpinBox()
+        self.end_hour.setRange(0, 23)
+        self.end_hour.setValue(9)
+        self.end_hour.setSuffix(" 时")
+        self.end_hour.setFixedWidth(90)
+
+        self.end_minute = QSpinBox()
+        self.end_minute.setRange(0, 59)
+        self.end_minute.setValue(25)
+        self.end_minute.setSuffix(" 分")
+        self.end_minute.setFixedWidth(90)
 
         time_row = QHBoxLayout()
         time_row.addWidget(QLabel("开始："))
-        time_row.addWidget(self.start_time)
+        time_row.addWidget(self.start_hour)
+        time_row.addWidget(self.start_minute)
         time_row.addSpacing(12)
         time_row.addWidget(QLabel("结束："))
-        time_row.addWidget(self.end_time)
+        time_row.addWidget(self.end_hour)
+        time_row.addWidget(self.end_minute)
         time_row.addStretch()
         layout.addLayout(time_row)
 
@@ -106,7 +125,9 @@ class AddEntryDialog(QDialog):
         layout.addWidget(buttons)
 
     def _on_accept(self):
-        if self.start_time.time() >= self.end_time.time():
+        start_total = self.start_hour.value() * 60 + self.start_minute.value()
+        end_total = self.end_hour.value() * 60 + self.end_minute.value()
+        if start_total >= end_total:
             QMessageBox.warning(self, "时间不合法", "结束时间必须晚于开始时间。")
             return
         content = self.content_edit.toPlainText().strip()
@@ -116,8 +137,8 @@ class AddEntryDialog(QDialog):
         self.accept()
 
     def get_values(self) -> tuple[str, str, str, list[str]]:
-        start = self.start_time.time().toString("HH:mm") + ":00"
-        end = self.end_time.time().toString("HH:mm") + ":00"
+        start = f"{self.start_hour.value():02d}:{self.start_minute.value():02d}:00"
+        end = f"{self.end_hour.value():02d}:{self.end_minute.value():02d}:00"
         content = self.content_edit.toPlainText().strip()
         raw_tags = self.tags_combo.currentText().strip()
         tags = [t.strip() for t in raw_tags.split(",") if t.strip()]
@@ -344,8 +365,11 @@ class MainWindow(QMainWindow):
         # Clear old entry widgets (preserve the trailing stretch item)
         while self.entries_layout.count() > 1:
             item = self.entries_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            if item is None:
+                continue
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
 
         if not entries:
             empty = QLabel("今日暂无记录，开始你的第一个番茄钟吧 🍅")
@@ -398,7 +422,7 @@ class MainWindow(QMainWindow):
         self.db.add_entry(today, session_no, start, end, content, selected_tags, skipped=False)
         self.refresh()
 
-    def closeEvent(self, event):
+    def closeEvent(self, a0):
         # Hide to tray instead of quitting
-        event.ignore()
+        a0.ignore()
         self.hide()
