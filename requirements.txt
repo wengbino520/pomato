@@ -1,4 +1,4 @@
 PyQt6>=6.4.0,<6.8.0
 PyQt6-Qt6>=6.4.0,<6.8.0
 openai>=1.0.0
-pywin32>=306
+pywin32>=306; sys_platform == "win32"

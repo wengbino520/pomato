@@ -118,10 +118,13 @@ class Config:
         return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
 
     def _sync_autostart_if_needed(self):
-        if sys.platform != "win32":
-            return
-
         enabled = bool(self._data.get("autostart_enabled", True))
+        if sys.platform == "win32":
+            self._sync_autostart_windows(enabled)
+        elif sys.platform.startswith("linux"):
+            self._sync_autostart_linux(enabled)
+
+    def _sync_autostart_windows(self, enabled: bool):
         try:
             import winreg
             key = winreg.OpenKey(
@@ -142,8 +145,30 @@ class Config:
             finally:
                 winreg.CloseKey(key)
         except Exception:
-            # Autostart is best-effort; failures should not break app startup.
-            return
+            pass
+
+    def _sync_autostart_linux(self, enabled: bool):
+        autostart_dir = Path.home() / ".config" / "autostart"
+        desktop_file = autostart_dir / "pomato.desktop"
+        try:
+            if enabled:
+                autostart_dir.mkdir(parents=True, exist_ok=True)
+                command = self._build_autostart_command_linux()
+                content = (
+                    "[Desktop Entry]\n"
+                    "Type=Application\n"
+                    f"Name={AUTOSTART_APP_NAME}\n"
+                    "Comment=POMATO 番茄日志\n"
+                    f"Exec={command}\n"
+                    "Terminal=false\n"
+                    "X-GNOME-Autostart-enabled=true\n"
+                )
+                desktop_file.write_text(content, encoding="utf-8")
+            else:
+                if desktop_file.exists():
+                    desktop_file.unlink()
+        except Exception:
+            pass
 
     def _build_autostart_command(self) -> str:
         if getattr(sys, "frozen", False):
@@ -152,3 +177,11 @@ class Config:
         project_root = Path(__file__).resolve().parent.parent
         main_py = project_root / "main.py"
         return f'"{sys.executable}" "{main_py}"'
+
+    def _build_autostart_command_linux(self) -> str:
+        if getattr(sys, "frozen", False):
+            return sys.executable
+
+        project_root = Path(__file__).resolve().parent.parent
+        main_py = project_root / "main.py"
+        return f"{sys.executable} {main_py}"

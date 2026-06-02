@@ -111,6 +111,34 @@ class TrayManager(QObject):
         painter.end()
         return QIcon(pixmap)
 
+    @staticmethod
+    def _play_sound():
+        """Play a notification beep; cross-platform best-effort."""
+        import sys
+        try:
+            if sys.platform == "win32":
+                import winsound
+                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+            elif sys.platform.startswith("linux"):
+                import subprocess
+                # Try paplay (PulseAudio), then aplay (ALSA), then bell
+                for cmd in [
+                    ["paplay", "/usr/share/sounds/freedesktop/stereo/message.oga"],
+                    ["aplay", "/usr/share/sounds/alsa/Front_Center.wav"],
+                ]:
+                    try:
+                        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        return
+                    except FileNotFoundError:
+                        continue
+                print("\a", end="", flush=True)  # terminal bell fallback
+            elif sys.platform == "darwin":
+                import subprocess
+                subprocess.Popen(["afplay", "/System/Library/Sounds/Ping.aiff"],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     # Timer signal handlers
     # ------------------------------------------------------------------
@@ -172,11 +200,7 @@ class TrayManager(QObject):
     def _show_popup(self, session_no: int, start_time: str, end_time: str):
         # Play notification sound if enabled
         if self.config.get("sound_enabled", True):
-            try:
-                import winsound
-                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
-            except Exception:
-                pass
+            self._play_sound()
 
         today = date.today().isoformat()
         previous_content = self.db.get_latest_valid_entry_content(today)
