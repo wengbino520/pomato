@@ -124,3 +124,43 @@ class Database:
                 (date_str,),
             ).fetchone()
         return row["cnt"] if row else 0
+
+    def get_next_session_no(self, date_str):
+        with self._get_conn() as conn:
+            row = conn.execute(
+                "SELECT COALESCE(MAX(session_no), 0) as max_no FROM pomodoro_entries WHERE date=?",
+                (date_str,),
+            ).fetchone()
+        return (row["max_no"] if row else 0) + 1
+
+    def get_latest_valid_entry_content(self, date_str):
+        with self._get_conn() as conn:
+            row = conn.execute(
+                """SELECT content FROM pomodoro_entries
+                   WHERE date=? AND skipped=0 AND content IS NOT NULL AND TRIM(content) != ''
+                   ORDER BY session_no DESC LIMIT 1""",
+                (date_str,),
+            ).fetchone()
+        return row["content"] if row else ""
+
+    def search_reports(self, keyword: str):
+        kw = (keyword or "").strip()
+        if not kw:
+            dates = self.get_all_report_dates()
+            return [self.get_report(d) for d in dates if self.get_report(d)]
+
+        like_pattern = f"%{kw}%"
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                """SELECT * FROM daily_reports
+                   WHERE date LIKE ? OR final_report LIKE ? OR ai_summary LIKE ?
+                   ORDER BY date DESC""",
+                (like_pattern, like_pattern, like_pattern),
+            ).fetchall()
+
+        result = []
+        for row in rows:
+            d = dict(row)
+            d["raw_entries"] = json.loads(d["raw_entries"])
+            result.append(d)
+        return result

@@ -5,6 +5,7 @@ from PyQt6.QtGui import QBrush, QColor, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QMenu, QMessageBox, QSystemTrayIcon
 
 from src.ai_client import AIClient
+from src.history_window import HistoryWindow
 from src.main_window import MainWindow
 from src.popup_window import PopupWindow
 from src.report_window import ReportWindow
@@ -22,6 +23,7 @@ class TrayManager(QObject):
 
         self.tray: QSystemTrayIcon | None = None
         self.main_window: MainWindow | None = None
+        self._active_popup: PopupWindow | None = None
 
     # ------------------------------------------------------------------
     # Setup
@@ -42,6 +44,18 @@ class TrayManager(QObject):
 
         report_action = menu.addAction("📋  生成日报")
         report_action.triggered.connect(self.show_report_window)
+
+        history_action = menu.addAction("📚  历史日报")
+        history_action.triggered.connect(self.show_history_window)
+
+        menu.addSeparator()
+
+        self.pause_action = menu.addAction("⏸  暂停")
+        self.pause_action.triggered.connect(self._on_pause_resume)
+
+        self.skip_break_action = menu.addAction("⏭  跳过休息")
+        self.skip_break_action.triggered.connect(self.timer.skip_break)
+        self.skip_break_action.setVisible(False)
 
         menu.addSeparator()
 
@@ -131,30 +145,78 @@ class TrayManager(QObject):
     def _on_state_changed(self, state: str):
         if state == "work":
             self.tray.setIcon(self._make_icon("work"))
+            self.pause_action.setVisible(True)
+            self.pause_action.setText("⏸  暂停")
+            self.skip_break_action.setVisible(False)
         elif state in ("short_break", "long_break"):
             self.tray.setIcon(self._make_icon("break"))
+            self.pause_action.setVisible(False)
+            self.skip_break_action.setVisible(True)
+        else:
+            self.pause_action.setVisible(False)
+            self.skip_break_action.setVisible(False)
+
+    def _on_pause_resume(self):
+        self.timer.pause_resume()
+        if self.timer._paused:
+            self.pause_action.setText("▶  继续")
+            self.tray.setIcon(self._make_icon("idle"))
+        else:
+            self.pause_action.setText("⏸  暂停")
+            self.tray.setIcon(self._make_icon("work"))
 
     # ------------------------------------------------------------------
     # Popup
     # ------------------------------------------------------------------
 
     def _show_popup(self, session_no: int, start_time: str, end_time: str):
-        popup = PopupWindow(session_no, self.config)
+        # Play notification sound if enabled
+        if self.config.get("sound_enabled", True):
+            try:
+                import winsound
+                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+            except Exception:
+                pass
+
+        today = date.today().isoformat()
+        previous_content = self.db.get_latest_valid_entry_content(today)
+        popup = PopupWindow(session_no, self.config, previous_content=previous_content)
+        self._active_popup = popup
 
         def on_submitted(content: str, tags: list[str]):
-            today = date.today().isoformat()
-            self.db.add_entry(today, session_no, start_time, end_time, content, tags)
+            day = date.today().isoformat()
+            self.db.add_entry(day, session_no, start_time, end_time, content, tags)
             if self.main_window:
                 self.main_window.refresh()
+            self._active_popup = None
 
         def on_skipped():
-            today = date.today().isoformat()
-            self.db.add_entry(today, session_no, start_time, end_time, "", [], skipped=True)
+            day = date.today().isoformat()
+            self.db.add_entry(day, session_no, start_time, end_time, "", [], skipped=True)
             if self.main_window:
                 self.main_window.refresh()
+            self._active_popup = None
+
+        def on_timeout():
+            day = date.today().isoformat()
+            self.db.add_entry(day, session_no, start_time, end_time, "未记录", ["未记录"], skipped=False)
+            if self.main_window:
+                self.main_window.refresh()
+            self.tray.showMessage(
+                "POMATO",
+                "本轮记录超时，已自动标记为未记录。",
+                QSystemTrayIcon.MessageIcon.Warning,
+                3000,
+            )
+            self._active_popup = None
+
+        def on_destroyed(_obj=None):
+            self._active_popup = None
 
         popup.submitted.connect(on_submitted)
         popup.skipped.connect(on_skipped)
+        popup.timed_out.connect(on_timeout)
+        popup.destroyed.connect(on_destroyed)
         popup.show_and_focus()
 
     # ------------------------------------------------------------------
@@ -188,3 +250,6 @@ class TrayManager(QObject):
 
     def show_settings(self):
         SettingsWindow(self.config).exec()
+
+    def show_history_window(self):
+        HistoryWindow(self.db).exec()

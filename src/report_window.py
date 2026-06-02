@@ -1,4 +1,5 @@
 from datetime import date
+import re
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QTextCursor
@@ -208,8 +209,31 @@ class ReportWindow(QDialog):
             self, "导出日报", default_name, "Markdown 文件 (*.md);;文本文件 (*.txt)"
         )
         if path:
-            text = self.editor.toPlainText()
+            markdown = self.editor.toPlainText()
+            text = markdown
+            if path.lower().endswith(".txt"):
+                text = self._markdown_to_plain_text(markdown)
             with open(path, "w", encoding="utf-8") as f:
                 f.write(text)
-            self.db.save_report(self.report_date, self.entries, final_report=text)
+            self.db.save_report(self.report_date, self.entries, final_report=markdown)
             QMessageBox.information(self, "导出成功", f"日报已保存至：\n{path}")
+
+    @staticmethod
+    def _markdown_to_plain_text(markdown: str) -> str:
+        lines = []
+        for line in markdown.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                lines.append("")
+                continue
+
+            stripped = re.sub(r"^#{1,6}\s*", "", stripped)
+            stripped = re.sub(r"^[-*+]\s+", "- ", stripped)
+            stripped = re.sub(r"\*\*(.*?)\*\*", r"\1", stripped)
+            stripped = re.sub(r"\*(.*?)\*", r"\1", stripped)
+            stripped = re.sub(r"`(.*?)`", r"\1", stripped)
+            lines.append(stripped)
+
+        plain = "\n".join(lines)
+        plain = re.sub(r"\n{3,}", "\n\n", plain)
+        return plain.strip() + "\n"

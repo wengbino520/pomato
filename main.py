@@ -49,6 +49,7 @@ def main():
     config = Config()
     db = Database()
     timer = TimerEngine(config)
+    timer.restore_session_no(db)   # NFR-03: restore today's count after restart
 
     tray = TrayManager(app, config, db, timer)
     tray.setup()

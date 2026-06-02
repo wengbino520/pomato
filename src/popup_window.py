@@ -1,7 +1,8 @@
 import ctypes
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QKeySequence, QShortcut
+from PyQt6.QtGui import QTextCursor
 from PyQt6.QtWidgets import (
     QDialog,
     QFrame,
@@ -19,12 +20,18 @@ from PyQt6.QtCore import pyqtSignal
 class PopupWindow(QDialog):
     submitted = pyqtSignal(str, list)   # content, tags
     skipped = pyqtSignal()
+    timed_out = pyqtSignal()
 
-    def __init__(self, session_no: int, config, parent=None):
+    def __init__(self, session_no: int, config, previous_content: str = "", parent=None):
         super().__init__(parent)
         self.session_no = session_no
         self.config = config
+        self.previous_content = (previous_content or "").strip()
         self.selected_tags: list[str] = []
+        self.timeout_seconds = max(10, int(self.config.get("popup_timeout_seconds", 180)))
+        self._timeout_timer = QTimer(self)
+        self._timeout_timer.setSingleShot(True)
+        self._timeout_timer.timeout.connect(self._on_timeout)
         self._setup_window()
         self._setup_ui()
 
@@ -125,6 +132,21 @@ class PopupWindow(QDialog):
         )
         skip_btn.clicked.connect(self._on_skip)
 
+        repeat_btn = QPushButton("重复上一条")
+        repeat_btn.setEnabled(bool(self.previous_content))
+        repeat_btn.setStyleSheet(
+            """
+            QPushButton {
+                color: #666; border: 1px solid #ddd;
+                border-radius: 5px; padding: 8px 14px;
+                font-size: 13px; background: white;
+            }
+            QPushButton:hover { background: #f5f5f5; }
+            QPushButton:disabled { color:#bbb; border-color:#eee; }
+            """
+        )
+        repeat_btn.clicked.connect(self._on_repeat_last)
+
         hint = QLabel("Ctrl+Enter 提交")
         hint.setStyleSheet("color: #bbb; font-size: 11px;")
 
@@ -144,6 +166,7 @@ class PopupWindow(QDialog):
         submit_btn.clicked.connect(self._on_submit)
 
         btn_layout.addWidget(skip_btn)
+        btn_layout.addWidget(repeat_btn)
         btn_layout.addWidget(hint)
         btn_layout.addStretch()
         btn_layout.addWidget(submit_btn)
@@ -187,6 +210,7 @@ class PopupWindow(QDialog):
             btn.setStyleSheet(self._tag_style(True))
 
     def _on_submit(self):
+        self._timeout_timer.stop()
         content = self.text_edit.toPlainText().strip()
         if not content:
             self.text_edit.setStyleSheet(
@@ -198,7 +222,20 @@ class PopupWindow(QDialog):
         self.accept()
 
     def _on_skip(self):
+        self._timeout_timer.stop()
         self.skipped.emit()
+        self.reject()
+
+    def _on_repeat_last(self):
+        if self.previous_content:
+            self.text_edit.setPlainText(self.previous_content)
+            self.text_edit.setFocus()
+            self.text_edit.moveCursor(QTextCursor.MoveOperation.End)
+
+    def _on_timeout(self):
+        if not self.isVisible():
+            return
+        self.timed_out.emit()
         self.reject()
 
     # ------------------------------------------------------------------
@@ -206,6 +243,7 @@ class PopupWindow(QDialog):
     # ------------------------------------------------------------------
 
     def show_and_focus(self):
+        self._timeout_timer.start(self.timeout_seconds * 1000)
         self.show()
         self.raise_()
         self.activateWindow()

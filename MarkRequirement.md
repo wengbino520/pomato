@@ -329,8 +329,8 @@ CREATE TABLE settings (
 | US1-T5 | 托盘图标实时倒计时 tooltip | ✅ | `tray_manager.py` · `_on_tick` |
 | US1-T6 | 托盘菜单状态文字（工作中/休息中） | ✅ | `tray_manager.py` · `status_action` |
 | US1-T7 | 手动开始按钮（今日看板） | ✅ | `main_window.py` · `start_btn` |
-| US1-T8 | 暂停 / 继续（后端已实现，UI未接入） | ⚠️ | `timer_engine.py` · `pause_resume()` |
-| US1-T9 | 跳过当前休息（后端已实现，UI未接入） | ⚠️ | `timer_engine.py` · `skip_break()` |
+| US1-T8 | 暂停 / 继续（后端已实现，UI未接入） | ✅ | `tray_manager.py` · `pause_action` / `_on_pause_resume` |
+| US1-T9 | 跳过当前休息（后端已实现，UI未接入） | ✅ | `tray_manager.py` · `skip_break_action` |
 | US1-T10 | 节假日不自动启动（可配置日历） | ❌ | — |
 
 ---
@@ -349,9 +349,9 @@ CREATE TABLE settings (
 | US2-T6 | Ctrl+Enter 快捷键提交 | ✅ | `popup_window.py` · `QShortcut` |
 | US2-T7 | 提交后自动关闭、进入休息计时 | ✅ | `popup_window.py` · `accept()` → timer 继续 |
 | US2-T8 | 休息结束托盘气泡通知 | ✅ | `tray_manager.py` · `_on_break_ended` |
-| US2-T9 | 弹窗提示音 | ❌ | 配置项存在，未实现播放 |
-| US2-T10 | 超时3分钟自动标记"未记录" | ❌ | — |
-| US2-T11 | "重复上一条"快捷按钮 | ❌ | — |
+| US2-T9 | 弹窗提示音 | ✅ | `tray_manager.py` · `winsound.MessageBeep` |
+| US2-T10 | 超时3分钟自动标记"未记录" | ✅ | `popup_window.py` + `tray_manager.py` |
+| US2-T11 | "重复上一条"快捷按钮 | ✅ | `popup_window.py` + `database.py` |
 
 ---
 
@@ -363,12 +363,12 @@ CREATE TABLE settings (
 |---------|------|------|----------|
 | US3-T1 | 今日条目时间轴列表展示 | ✅ | `main_window.py` · `EntryItem` |
 | US3-T2 | 已完成番茄钟数量统计 | ✅ | `main_window.py` · `pomodoro_count` |
-| US3-T3 | 总专注时长统计（分钟） | ❌ | 仅有数量，未计算累计时长 |
+| US3-T3 | 总专注时长统计（分钟） | ✅ | `main_window.py` · `focus_time` label |
 | US3-T4 | 双击托盘图标打开主窗口 | ✅ | `tray_manager.py` · `_on_tray_activated` |
 | US3-T5 | 关闭主窗口最小化到托盘 | ✅ | `main_window.py` · `closeEvent` |
-| US3-T6 | 条目内联编辑 UI | ❌ | DB `update_entry()` 已实现，无 UI |
-| US3-T7 | 条目删除 UI | ❌ | DB `delete_entry()` 已实现，无 UI |
-| US3-T8 | 手动补录条目（填写时间段+内容） | ❌ | — |
+| US3-T6 | 条目内联编辑 UI | ✅ | `main_window.py` · `EditEntryDialog` / `_on_edit_entry` |
+| US3-T7 | 条目删除 UI | ✅ | `main_window.py` · `_on_delete_entry` |
+| US3-T8 | 手动补录条目（填写时间段+内容） | ✅ | `main_window.py` · `AddEntryDialog` / `_on_add_entry` |
 
 ---
 
@@ -383,8 +383,8 @@ CREATE TABLE settings (
 | US4-T3 | 流式输出（打字机效果） | ✅ | `report_window.py` · `_AIWorker` + `chunk_received` |
 | US4-T4 | AI 失败时兜底展示原始记录 | ✅ | `report_window.py` · `_on_error` / `_generate_fallback` |
 | US4-T5 | 重新生成按钮 | ✅ | `report_window.py` · `regenerate_btn` |
-| US4-T6 | 自定义 Prompt 模板（UI配置） | ❌ | `DEFAULT_SYSTEM_PROMPT` 硬编码 |
-| US4-T7 | Ollama 本地模型一键切换 | ❌ | 可手动填 base_url 间接支持，无专项适配 |
+| US4-T6 | 自定义 Prompt 模板（UI配置） | ✅ | `settings_window.py` + `ai_client.py` |
+| US4-T7 | Ollama 本地模型一键切换 | ✅ | `settings_window.py` · `_apply_ollama_profile` |
 | US4-T8 | 日报存入数据库（可查历史） | ✅ | `database.py` · `save_report` |
 
 ---
@@ -398,9 +398,9 @@ CREATE TABLE settings (
 | US5-T1 | 日报全文可编辑（富文本框） | ✅ | `report_window.py` · `self.editor` |
 | US5-T2 | 导出为 Markdown 文件（.md） | ✅ | `report_window.py` · `_export_markdown` |
 | US5-T3 | 一键复制到剪贴板 | ✅ | `report_window.py` · `_copy_to_clipboard` |
-| US5-T4 | 导出为纯文本（钉钉/飞书直接粘贴格式） | ⚠️ | 对话框有 `.txt` 选项，内容仍为 Markdown |
-| US5-T5 | 历史日报列表 UI（按日期查阅） | ❌ | DB `get_all_report_dates()` 已实现，无 UI |
-| US5-T6 | 日报内容搜索 | ❌ | — |
+| US5-T4 | 导出为纯文本（钉钉/飞书直接粘贴格式） | ✅ | `report_window.py` · `_markdown_to_plain_text` |
+| US5-T5 | 历史日报列表 UI（按日期查阅） | ✅ | `history_window.py` · `HistoryWindow` |
+| US5-T6 | 日报内容搜索 | ✅ | `history_window.py` + `database.py` · `search_reports` |
 | US5-T7 | 导出 Word / PDF | ❌ | P2 优先级 |
 
 ---
@@ -415,9 +415,9 @@ CREATE TABLE settings (
 | US6-T2 | AI 接口配置（Base URL / Key / 模型名） | ✅ | `settings_window.py` |
 | US6-T3 | 配置持久化到 JSON 文件 | ✅ | `config.py` · `~/.pomato/config.json` |
 | US6-T4 | 提示音开关配置 | ✅ | `settings_window.py` · `sound_enabled`（存储） |
-| US6-T5 | 自定义标签增删 UI | ❌ | 配置文件可手动改，设置面板无 UI |
-| US6-T6 | 开机自启动 | ❌ | — |
-| US6-T7 | API Key 加密存储（非明文） | ❌ | 当前明文写入 JSON |
+| US6-T5 | 自定义标签增删 UI | ✅ | `settings_window.py` · `tag_list` / `_add_tag` / `_del_tag` |
+| US6-T6 | 开机自启动 | ✅ | `settings_window.py` + `config.py`（Windows Run 注册表） |
+| US6-T7 | API Key 加密存储（非明文） | ✅ | `config.py`（DPAPI/XOR 加密落盘） |
 
 ---
 
@@ -427,7 +427,7 @@ CREATE TABLE settings (
 |-----|------|------|------|
 | NFR-01 | 离线可用（计时+记录） | ✅ | 仅 AI 汇总需联网 |
 | NFR-02 | 数据本地 SQLite | ✅ | `~/.pomato/pomato.db` |
-| NFR-03 | 意外关闭后恢复当日数据 | ⚠️ | DB 数据保留，但 `session_no` 从 0 重新计数 |
+| NFR-03 | 意外关闭后恢复当日数据 | ✅ | `timer_engine.py` · `restore_session_no()` 启动时调用 |
 | NFR-04 | 轻量内存 < 100MB | 未测试 | — |
 | NFR-05 | 安装包打包（exe） | ❌ | PyInstaller 配置未建立 |
 
@@ -437,14 +437,14 @@ CREATE TABLE settings (
 
 | 模块 | 总 Task 数 | ✅ 已完成 | ⚠️ 部分 | ❌ 未实现 |
 |------|-----------|----------|---------|----------|
-| US-1 计时引擎 | 10 | 7 | 2 | 1 |
-| US-2 弹窗记录 | 11 | 8 | 0 | 3 |
-| US-3 今日看板 | 8 | 5 | 0 | 3 |
-| US-4 AI汇总 | 8 | 6 | 0 | 2 |
-| US-5 日报导出 | 7 | 3 | 1 | 3 |
-| US-6 配置中心 | 7 | 4 | 0 | 3 |
-| NFR | 5 | 2 | 1 | 2 |
-| **合计** | **56** | **35 (63%)** | **4 (7%)** | **17 (30%)** |
+| US-1 计时引擎 | 10 | 9 | 0 | 1 |
+| US-2 弹窗记录 | 11 | 11 | 0 | 0 |
+| US-3 今日看板 | 8 | 8 | 0 | 0 |
+| US-4 AI汇总 | 8 | 8 | 0 | 0 |
+| US-5 日报导出 | 7 | 6 | 0 | 1 |
+| US-6 配置中心 | 7 | 7 | 0 | 0 |
+| NFR | 5 | 3 | 0 | 2 |
+| **合计** | **56** | **52 (93%)** | **0 (0%)** | **4 (7%)** |
 
 ---
 
@@ -452,13 +452,7 @@ CREATE TABLE settings (
 
 | 优先级 | Task | 预估工作量 |
 |--------|------|-----------|
-| 🔴 高 | US1-T8/T9 暂停/跳过休息接入托盘菜单 | 0.5h |
-| 🔴 高 | US3-T3 总专注时长统计显示 | 0.5h |
-| 🔴 高 | US3-T6/T7 条目编辑/删除 UI | 2h |
-| 🟡 中 | US2-T9 弹窗提示音（系统 beep） | 1h |
-| 🟡 中 | US5-T5 历史日报列表 UI | 2h |
-| 🟡 中 | US6-T5 自定义标签增删 UI | 1.5h |
-| 🟡 中 | NFR-03 重启恢复 session_no | 1h |
-| 🟢 低 | US6-T6 开机自启动（注册表写入） | 1h |
-| 🟢 低 | US6-T7 API Key 加密存储 | 1h |
-| 🟢 低 | 打包为 .exe（PyInstaller） | 2h |
+| 🔴 高 | US1-T10 节假日不自动启动（可配置日历） | 3h |
+| 🟡 中 | US5-T7 导出 Word / PDF | 2h |
+| 🟡 中 | NFR-04 轻量内存 < 100MB 压测与优化 | 2h |
+| 🟢 低 | NFR-05 打包为 .exe（PyInstaller） | 2h |

@@ -1,24 +1,138 @@
 from datetime import date
 
-from PyQt6.QtCore import Qt, pyqtSlot
+from PyQt6.QtCore import Qt, QTime, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QTimeEdit,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
 
-class EntryItem(QFrame):
-    """Single pomodoro entry row in the kanban list."""
+class EditEntryDialog(QDialog):
+    """简单对话框：编辑条目的内容文字。"""
 
     def __init__(self, entry: dict, parent=None):
         super().__init__(parent)
+        self.setWindowTitle("编辑记录")
+        self.setMinimumWidth(400)
+        layout = QVBoxLayout(self)
+
+        self.text_edit = QTextEdit()
+        self.text_edit.setPlainText(entry.get("content") or "")
+        self.text_edit.setMinimumHeight(80)
+        layout.addWidget(QLabel("工作内容："))
+        layout.addWidget(self.text_edit)
+
+        self.tags_edit = QLineEdit()
+        self.tags_edit.setPlaceholderText("标签用逗号分隔，如：开发,测试")
+        self.tags_edit.setText(", ".join(entry.get("tags") or []))
+        layout.addWidget(QLabel("标签："))
+        layout.addWidget(self.tags_edit)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save |
+            QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def get_values(self) -> tuple[str, list[str]]:
+        content = self.text_edit.toPlainText().strip()
+        tags = [t.strip() for t in self.tags_edit.text().split(",") if t.strip()]
+        return content, tags
+
+
+class AddEntryDialog(QDialog):
+    """手动补录条目：可填写时间段、内容与标签。"""
+
+    def __init__(self, tags: list[str], parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("手动补录")
+        self.setMinimumWidth(420)
+
+        layout = QVBoxLayout(self)
+
+        self.start_time = QTimeEdit()
+        self.start_time.setDisplayFormat("HH:mm")
+        self.start_time.setTime(QTime(9, 0))
+        self.end_time = QTimeEdit()
+        self.end_time.setDisplayFormat("HH:mm")
+        self.end_time.setTime(QTime(9, 25))
+
+        time_row = QHBoxLayout()
+        time_row.addWidget(QLabel("开始："))
+        time_row.addWidget(self.start_time)
+        time_row.addSpacing(12)
+        time_row.addWidget(QLabel("结束："))
+        time_row.addWidget(self.end_time)
+        time_row.addStretch()
+        layout.addLayout(time_row)
+
+        layout.addWidget(QLabel("工作内容："))
+        self.content_edit = QTextEdit()
+        self.content_edit.setMinimumHeight(90)
+        layout.addWidget(self.content_edit)
+
+        layout.addWidget(QLabel("标签："))
+        self.tags_combo = QComboBox()
+        self.tags_combo.setEditable(True)
+        self.tags_combo.addItem("")
+        for tag in tags:
+            self.tags_combo.addItem(tag)
+        self.tags_combo.setCurrentIndex(0)
+        self.tags_combo.setPlaceholderText("可输入多个标签，逗号分隔")
+        layout.addWidget(self.tags_combo)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save |
+            QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self._on_accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _on_accept(self):
+        if self.start_time.time() >= self.end_time.time():
+            QMessageBox.warning(self, "时间不合法", "结束时间必须晚于开始时间。")
+            return
+        content = self.content_edit.toPlainText().strip()
+        if not content:
+            QMessageBox.warning(self, "内容为空", "请填写工作内容。")
+            return
+        self.accept()
+
+    def get_values(self) -> tuple[str, str, str, list[str]]:
+        start = self.start_time.time().toString("HH:mm") + ":00"
+        end = self.end_time.time().toString("HH:mm") + ":00"
+        content = self.content_edit.toPlainText().strip()
+        raw_tags = self.tags_combo.currentText().strip()
+        tags = [t.strip() for t in raw_tags.split(",") if t.strip()]
+        return start, end, content, tags
+
+
+class EntryItem(QFrame):
+    """Single pomodoro entry row in the kanban list."""
+
+    edit_requested = pyqtSignal(dict)    # entry dict
+    delete_requested = pyqtSignal(int)   # entry id
+
+    def __init__(self, entry: dict, parent=None):
+        super().__init__(parent)
+        self.entry = entry
         self.setStyleSheet(
             """
             QFrame {
@@ -32,7 +146,7 @@ class EntryItem(QFrame):
         )
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setContentsMargins(12, 8, 8, 8)
         layout.setSpacing(8)
 
         # Session badge
@@ -69,10 +183,31 @@ class EntryItem(QFrame):
         tags_lbl = QLabel(tags_str)
         tags_lbl.setStyleSheet("color:#ef5350; font-size:11px;")
 
+        # Edit / Delete buttons (hidden until hover via enterEvent)
+        edit_btn = QPushButton("✏")
+        edit_btn.setFixedSize(26, 26)
+        edit_btn.setToolTip("编辑")
+        edit_btn.setStyleSheet(
+            "QPushButton{border:none;color:#888;font-size:14px;background:transparent;}"
+            "QPushButton:hover{color:#ef5350;}"
+        )
+        edit_btn.clicked.connect(lambda: self.edit_requested.emit(self.entry))
+
+        del_btn = QPushButton("🗑")
+        del_btn.setFixedSize(26, 26)
+        del_btn.setToolTip("删除")
+        del_btn.setStyleSheet(
+            "QPushButton{border:none;color:#888;font-size:14px;background:transparent;}"
+            "QPushButton:hover{color:#ef5350;}"
+        )
+        del_btn.clicked.connect(lambda: self.delete_requested.emit(self.entry["id"]))
+
         layout.addWidget(badge)
         layout.addWidget(time_lbl)
         layout.addWidget(content_lbl)
         layout.addWidget(tags_lbl)
+        layout.addWidget(edit_btn)
+        layout.addWidget(del_btn)
 
 
 class MainWindow(QMainWindow):
@@ -129,10 +264,14 @@ class MainWindow(QMainWindow):
         self.pomodoro_count = QLabel("🍅 0 个番茄钟")
         self.pomodoro_count.setStyleSheet("font-size:13px; color:#e65100;")
 
+        self.focus_time = QLabel("⏱ 专注 0 分钟")
+        self.focus_time.setStyleSheet("font-size:13px; color:#e65100;")
+
         self.timer_status = QLabel("⏱ 等待中")
         self.timer_status.setStyleSheet("font-size:13px; color:#666;")
 
         sl.addWidget(self.pomodoro_count)
+        sl.addWidget(self.focus_time)
         sl.addStretch()
         sl.addWidget(self.timer_status)
         root.addWidget(stats)
@@ -163,11 +302,16 @@ class MainWindow(QMainWindow):
         start_btn.setStyleSheet(self._btn_style("#757575"))
         start_btn.clicked.connect(self.timer.manual_start)
 
+        add_btn = QPushButton("＋  手动补录")
+        add_btn.setStyleSheet(self._btn_style("#5d4037"))
+        add_btn.clicked.connect(self._on_add_entry)
+
         report_btn = QPushButton("📋  生成日报")
         report_btn.setStyleSheet(self._btn_style("#ef5350"))
         report_btn.clicked.connect(self._on_generate_report)
 
         bl.addWidget(start_btn)
+        bl.addWidget(add_btn)
         bl.addStretch()
         bl.addWidget(report_btn)
         root.addWidget(bottom)
@@ -194,6 +338,8 @@ class MainWindow(QMainWindow):
         entries = self.db.get_entries_by_date(today)
         completed = sum(1 for e in entries if not e.get("skipped"))
         self.pomodoro_count.setText(f"🍅 {completed} 个番茄钟")
+        focus_min = completed * self.config.get("pomodoro_duration", 25)
+        self.focus_time.setText(f"⏳ 专注 {focus_min} 分钟")
 
         # Clear old entry widgets (preserve the trailing stretch item)
         while self.entries_layout.count() > 1:
@@ -208,7 +354,10 @@ class MainWindow(QMainWindow):
             self.entries_layout.insertWidget(0, empty)
         else:
             for i, entry in enumerate(entries):
-                self.entries_layout.insertWidget(i, EntryItem(entry))
+                item = EntryItem(entry)
+                item.edit_requested.connect(self._on_edit_entry)
+                item.delete_requested.connect(self._on_delete_entry)
+                self.entries_layout.insertWidget(i, item)
 
     # ------------------------------------------------------------------
     # Slots
@@ -225,6 +374,29 @@ class MainWindow(QMainWindow):
     def _on_generate_report(self):
         if self.on_generate_report:
             self.on_generate_report()
+
+    def _on_edit_entry(self, entry: dict):
+        dlg = EditEntryDialog(entry, self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            content, tags = dlg.get_values()
+            self.db.update_entry(entry["id"], content, tags)
+            self.refresh()
+
+    def _on_delete_entry(self, entry_id: int):
+        self.db.delete_entry(entry_id)
+        self.refresh()
+
+    def _on_add_entry(self):
+        tags = self.config.get("custom_tags", [])
+        dlg = AddEntryDialog(tags, self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        start, end, content, selected_tags = dlg.get_values()
+        today = date.today().isoformat()
+        session_no = self.db.get_next_session_no(today)
+        self.db.add_entry(today, session_no, start, end, content, selected_tags, skipped=False)
+        self.refresh()
 
     def closeEvent(self, event):
         # Hide to tray instead of quitting

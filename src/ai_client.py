@@ -49,14 +49,19 @@ class AIClient:
         api_key = self.config.get("api_key", "")
         base_url = self.config.get("api_base_url", "https://api.openai.com/v1")
         model = self.config.get("api_model", "gpt-4o-mini")
+        system_prompt = self.config.get("report_system_prompt", "") or DEFAULT_SYSTEM_PROMPT
 
-        if not api_key:
+        local_ollama = str(base_url).startswith("http://localhost:11434") or str(base_url).startswith("http://127.0.0.1:11434")
+        if not api_key and not local_ollama:
             raise ValueError("请先在设置中配置 API Key")
 
-        client = OpenAI(api_key=api_key, base_url=base_url)
+        client_kwargs = {"base_url": base_url}
+        if api_key:
+            client_kwargs["api_key"] = api_key
+        client = OpenAI(**client_kwargs)
         prompt = build_prompt(entries, report_date)
         messages = [
-            {"role": "system", "content": DEFAULT_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
         ]
 
@@ -80,4 +85,4 @@ class AIClient:
             messages=messages,
             temperature=0.7,
         )
-        return response.choices[0].message.content
+        return response.choices[0].message.content or ""

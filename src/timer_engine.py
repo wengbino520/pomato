@@ -53,6 +53,14 @@ class TimerEngine(QObject):
         if self._state in (TimerState.SHORT_BREAK, TimerState.LONG_BREAK):
             self._start_work_session()
 
+    def restore_session_no(self, db):
+        """从数据库恢复今日已完成的番茄数，避免重启后 session_no 归零。"""
+        today = date.today().isoformat()
+        count = db.get_today_session_count(today)
+        if count > 0:
+            self._session_no = count
+            self._today = today
+
     def pause_resume(self):
         self._paused = not self._paused
 

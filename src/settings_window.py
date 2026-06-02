@@ -7,10 +7,12 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
     QMessageBox,
     QPushButton,
     QScrollArea,
     QSpinBox,
+    QTextEdit,
     QTimeEdit,
     QVBoxLayout,
     QWidget,
@@ -92,6 +94,24 @@ class SettingsWindow(QDialog):
         self.api_model.setPlaceholderText("gpt-4o-mini")
         af.addRow("模型名称：", self.api_model)
 
+        self.system_prompt = QTextEdit()
+        self.system_prompt.setPlaceholderText("可选：自定义 AI 日报风格和结构要求")
+        self.system_prompt.setMaximumHeight(120)
+        af.addRow("日报模板 Prompt：", self.system_prompt)
+
+        ollama_row = QHBoxLayout()
+        ollama_hint = QLabel("本地模型：")
+        ollama_btn = QPushButton("一键切换 Ollama")
+        ollama_btn.setStyleSheet(
+            "QPushButton{border:1px solid #ddd;border-radius:4px;padding:4px 10px;}"
+            "QPushButton:hover{background:#f5f5f5;}"
+        )
+        ollama_btn.clicked.connect(self._apply_ollama_profile)
+        ollama_row.addWidget(ollama_hint)
+        ollama_row.addWidget(ollama_btn)
+        ollama_row.addStretch()
+        af.addRow("", ollama_row)
+
         cl.addWidget(ai_group)
 
         # ── Misc ────────────────────────────────────────────────────────
@@ -99,7 +119,51 @@ class SettingsWindow(QDialog):
         mf = QFormLayout(misc_group)
         self.sound_enabled = QCheckBox("启用提示音")
         mf.addRow("", self.sound_enabled)
+
+        self.autostart_enabled = QCheckBox("开机自启动")
+        mf.addRow("", self.autostart_enabled)
+
+        self.popup_timeout = QSpinBox()
+        self.popup_timeout.setRange(30, 600)
+        self.popup_timeout.setSuffix(" 秒")
+        mf.addRow("弹窗自动超时：", self.popup_timeout)
         cl.addWidget(misc_group)
+
+        # ── Tags ────────────────────────────────────────────────────────
+        tags_group = QGroupBox("自定义标签")
+        tl = QVBoxLayout(tags_group)
+
+        self.tag_list = QListWidget()
+        self.tag_list.setMaximumHeight(120)
+        self.tag_list.setStyleSheet(
+            "QListWidget{border:1px solid #ddd;border-radius:4px;}"
+            "QListWidget::item{padding:4px;}"
+            "QListWidget::item:selected{background:#ffebee;color:#d32f2f;}"
+        )
+        tl.addWidget(self.tag_list)
+
+        tag_input_row = QHBoxLayout()
+        self.new_tag_input = QLineEdit()
+        self.new_tag_input.setPlaceholderText("新标签名称…")
+        self.new_tag_input.returnPressed.connect(self._add_tag)
+        add_tag_btn = QPushButton("添加")
+        add_tag_btn.setStyleSheet(
+            "QPushButton{background:#ef5350;color:white;border:none;"
+            "border-radius:4px;padding:5px 14px;}"
+            "QPushButton:hover{background:#e53935;}"
+        )
+        add_tag_btn.clicked.connect(self._add_tag)
+        del_tag_btn = QPushButton("删除选中")
+        del_tag_btn.setStyleSheet(
+            "QPushButton{border:1px solid #ddd;border-radius:4px;padding:5px 10px;}"
+            "QPushButton:hover{background:#f5f5f5;}"
+        )
+        del_tag_btn.clicked.connect(self._del_tag)
+        tag_input_row.addWidget(self.new_tag_input)
+        tag_input_row.addWidget(add_tag_btn)
+        tag_input_row.addWidget(del_tag_btn)
+        tl.addLayout(tag_input_row)
+        cl.addWidget(tags_group)
 
         cl.addStretch()
         scroll.setWidget(content)
@@ -141,7 +205,14 @@ class SettingsWindow(QDialog):
         self.api_base.setText(self.config.get("api_base_url", ""))
         self.api_key.setText(self.config.get("api_key", ""))
         self.api_model.setText(self.config.get("api_model", "gpt-4o-mini"))
+        self.system_prompt.setPlainText(self.config.get("report_system_prompt", ""))
         self.sound_enabled.setChecked(self.config.get("sound_enabled", True))
+        self.autostart_enabled.setChecked(self.config.get("autostart_enabled", True))
+        self.popup_timeout.setValue(self.config.get("popup_timeout_seconds", 180))
+
+        self.tag_list.clear()
+        for tag in self.config.get("custom_tags", []):
+            self.tag_list.addItem(tag)
 
     def _save(self):
         t = self.start_time.time()
@@ -153,6 +224,40 @@ class SettingsWindow(QDialog):
         self.config.set("api_base_url", self.api_base.text().strip())
         self.config.set("api_key", self.api_key.text().strip())
         self.config.set("api_model", self.api_model.text().strip())
+        self.config.set("report_system_prompt", self.system_prompt.toPlainText().strip())
         self.config.set("sound_enabled", self.sound_enabled.isChecked())
+        self.config.set("autostart_enabled", self.autostart_enabled.isChecked())
+        self.config.set("popup_timeout_seconds", self.popup_timeout.value())
+        self.config.sync_autostart()
+        tags = []
+        for i in range(self.tag_list.count()):
+            item = self.tag_list.item(i)
+            if item is not None:
+                tags.append(item.text())
+        self.config.set("custom_tags", tags)
         QMessageBox.information(self, "保存成功", "设置已保存！重启后生效（计时参数下轮番茄钟生效）。")
         self.accept()
+
+    def _add_tag(self):
+        name = self.new_tag_input.text().strip()
+        if not name:
+            return
+        existing = []
+        for i in range(self.tag_list.count()):
+            item = self.tag_list.item(i)
+            if item is not None:
+                existing.append(item.text())
+        if name not in existing:
+            self.tag_list.addItem(name)
+        self.new_tag_input.clear()
+
+    def _del_tag(self):
+        row = self.tag_list.currentRow()
+        if row >= 0:
+            self.tag_list.takeItem(row)
+
+    def _apply_ollama_profile(self):
+        self.api_base.setText("http://localhost:11434/v1")
+        self.api_key.setText("")
+        if not self.api_model.text().strip() or self.api_model.text().strip() == "gpt-4o-mini":
+            self.api_model.setText("qwen2.5:7b")
