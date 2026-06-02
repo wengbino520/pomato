@@ -128,7 +128,7 @@ class ReportWindow(QDialog):
     def _btn_style(color: str) -> str:
         return (
             f"QPushButton {{ background:{color}; color:white; border:none;"
-            "  border-radius:5px; padding:8px 16px; font-size:13px; }}"
+            f"  border-radius:5px; padding:8px 16px; font-size:13px; }}"
             "QPushButton:disabled { background:#ccc; }"
         )
 

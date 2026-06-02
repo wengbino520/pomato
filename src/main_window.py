@@ -23,38 +23,83 @@ from PyQt6.QtWidgets import (
 
 
 class EditEntryDialog(QDialog):
-    """简单对话框：编辑条目的内容文字。"""
+    """编辑条目：可修改时间段、内容与标签。"""
 
-    def __init__(self, entry: dict, parent=None):
+    def __init__(self, entry: dict, avail_tags: list[str], parent=None):
         super().__init__(parent)
         self.setWindowTitle("编辑记录")
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(420)
         layout = QVBoxLayout(self)
 
+        # ---- 时间行 ----
+        def _parse_hm(t: str | None, default_h: int, default_m: int):
+            if t:
+                parts = t.split(":")
+                try:
+                    return int(parts[0]), int(parts[1])
+                except (IndexError, ValueError):
+                    pass
+            return default_h, default_m
+
+        sh, sm = _parse_hm(entry.get("start_time"), 9, 0)
+        eh, em = _parse_hm(entry.get("end_time"), 9, 25)
+
+        self.start_hour = QSpinBox(); self.start_hour.setRange(0, 23); self.start_hour.setValue(sh); self.start_hour.setSuffix(" 时"); self.start_hour.setFixedWidth(90)
+        self.start_minute = QSpinBox(); self.start_minute.setRange(0, 59); self.start_minute.setValue(sm); self.start_minute.setSuffix(" 分"); self.start_minute.setFixedWidth(90)
+        self.end_hour = QSpinBox(); self.end_hour.setRange(0, 23); self.end_hour.setValue(eh); self.end_hour.setSuffix(" 时"); self.end_hour.setFixedWidth(90)
+        self.end_minute = QSpinBox(); self.end_minute.setRange(0, 59); self.end_minute.setValue(em); self.end_minute.setSuffix(" 分"); self.end_minute.setFixedWidth(90)
+
+        time_row = QHBoxLayout()
+        time_row.addWidget(QLabel("开始："))
+        time_row.addWidget(self.start_hour)
+        time_row.addWidget(self.start_minute)
+        time_row.addSpacing(12)
+        time_row.addWidget(QLabel("结束："))
+        time_row.addWidget(self.end_hour)
+        time_row.addWidget(self.end_minute)
+        time_row.addStretch()
+        layout.addLayout(time_row)
+
+        # ---- 内容 ----
         self.text_edit = QTextEdit()
         self.text_edit.setPlainText(entry.get("content") or "")
         self.text_edit.setMinimumHeight(80)
         layout.addWidget(QLabel("工作内容："))
         layout.addWidget(self.text_edit)
 
-        self.tags_edit = QLineEdit()
-        self.tags_edit.setPlaceholderText("标签用逗号分隔，如：开发,测试")
-        self.tags_edit.setText(", ".join(entry.get("tags") or []))
+        # ---- 标签 ----
+        self.tags_combo = QComboBox()
+        self.tags_combo.setEditable(True)
+        self.tags_combo.addItem("")
+        for tag in avail_tags:
+            self.tags_combo.addItem(tag)
+        self.tags_combo.setCurrentText(", ".join(entry.get("tags") or []))
+        self.tags_combo.setPlaceholderText("可输入多个标签，逗号分隔")
         layout.addWidget(QLabel("标签："))
-        layout.addWidget(self.tags_edit)
+        layout.addWidget(self.tags_combo)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save |
             QDialogButtonBox.StandardButton.Cancel
         )
-        buttons.accepted.connect(self.accept)
+        buttons.accepted.connect(self._on_accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-    def get_values(self) -> tuple[str, list[str]]:
+    def _on_accept(self):
+        start_total = self.start_hour.value() * 60 + self.start_minute.value()
+        end_total = self.end_hour.value() * 60 + self.end_minute.value()
+        if start_total >= end_total:
+            QMessageBox.warning(self, "时间不合法", "结束时间必须晚于开始时间。")
+            return
+        self.accept()
+
+    def get_values(self) -> tuple[str, str, str, list[str]]:
+        start = f"{self.start_hour.value():02d}:{self.start_minute.value():02d}:00"
+        end = f"{self.end_hour.value():02d}:{self.end_minute.value():02d}:00"
         content = self.text_edit.toPlainText().strip()
-        tags = [t.strip() for t in self.tags_edit.text().split(",") if t.strip()]
-        return content, tags
+        tags = [t.strip() for t in self.tags_combo.currentText().split(",") if t.strip()]
+        return start, end, content, tags
 
 
 class AddEntryDialog(QDialog):
@@ -345,8 +390,8 @@ class MainWindow(QMainWindow):
     def _btn_style(color: str) -> str:
         return (
             f"QPushButton {{ background:{color}; color:white; border:none;"
-            "  border-radius:5px; padding:8px 20px; font-size:13px; }"
-            "QPushButton:hover { opacity:0.9; }"
+            f"  border-radius:5px; padding:8px 20px; font-size:13px; }}"
+            f"QPushButton:hover {{ background:{color}; border:1px solid rgba(255,255,255,0.5); }}"
         )
 
     # ------------------------------------------------------------------
@@ -401,10 +446,11 @@ class MainWindow(QMainWindow):
             self.on_generate_report()
 
     def _on_edit_entry(self, entry: dict):
-        dlg = EditEntryDialog(entry, self)
+        avail_tags = self.config.get("custom_tags", [])
+        dlg = EditEntryDialog(entry, avail_tags, self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
-            content, tags = dlg.get_values()
-            self.db.update_entry(entry["id"], content, tags)
+            start, end, content, tags = dlg.get_values()
+            self.db.update_entry(entry["id"], content, tags, start, end)
             self.refresh()
 
     def _on_delete_entry(self, entry_id: int):
@@ -413,15 +459,18 @@ class MainWindow(QMainWindow):
 
     def _on_add_entry(self):
         tags = self.config.get("custom_tags", [])
-        dlg = AddEntryDialog(tags, self)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
-            return
-
-        start, end, content, selected_tags = dlg.get_values()
         today = date.today().isoformat()
-        session_no = self.db.get_next_session_no(today)
-        self.db.add_entry(today, session_no, start, end, content, selected_tags, skipped=False)
-        self.refresh()
+        added = 0
+        while True:
+            dlg = AddEntryDialog(tags, self)
+            if dlg.exec() != QDialog.DialogCode.Accepted:
+                break
+            start, end, content, selected_tags = dlg.get_values()
+            session_no = self.db.get_next_session_no(today)
+            self.db.add_entry(today, session_no, start, end, content, selected_tags, skipped=False)
+            added += 1
+        if added:
+            self.refresh()
 
     def closeEvent(self, a0: QCloseEvent | None):
         # Hide to tray instead of quitting

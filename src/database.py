@@ -72,13 +72,19 @@ class Database:
             result.append(d)
         return result
 
-    def update_entry(self, entry_id, content, tags):
+    def update_entry(self, entry_id, content, tags, start_time=None, end_time=None):
         tags_json = json.dumps(tags or [], ensure_ascii=False)
         with self._get_conn() as conn:
-            conn.execute(
-                "UPDATE pomodoro_entries SET content=?, tags=? WHERE id=?",
-                (content, tags_json, entry_id),
-            )
+            if start_time is not None and end_time is not None:
+                conn.execute(
+                    "UPDATE pomodoro_entries SET content=?, tags=?, start_time=?, end_time=? WHERE id=?",
+                    (content, tags_json, start_time, end_time, entry_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE pomodoro_entries SET content=?, tags=? WHERE id=?",
+                    (content, tags_json, entry_id),
+                )
 
     def delete_entry(self, entry_id):
         with self._get_conn() as conn:
