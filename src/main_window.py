@@ -423,7 +423,7 @@ class MainWindow(QMainWindow):
         self.db.add_entry(today, session_no, start, end, content, selected_tags, skipped=False)
         self.refresh()
 
-    def closeEvent(self, a0: QCloseEvent):
+    def closeEvent(self, a0: QCloseEvent | None):
         # Hide to tray instead of quitting
         if a0 is not None:
             a0.ignore()
