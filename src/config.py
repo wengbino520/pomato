@@ -176,7 +176,15 @@ class Config:
 
         project_root = Path(__file__).resolve().parent.parent
         main_py = project_root / "main.py"
-        return f'"{sys.executable}" "{main_py}"'
+
+        # Use pythonw.exe on Windows to suppress the console window
+        python_exe = Path(sys.executable)
+        if sys.platform == "win32":
+            pythonw = python_exe.parent / "pythonw.exe"
+            if pythonw.exists():
+                python_exe = pythonw
+
+        return f'"{python_exe}" "{main_py}"'
 
     def _build_autostart_command_linux(self) -> str:
         if getattr(sys, "frozen", False):
