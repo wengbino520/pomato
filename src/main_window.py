@@ -1,11 +1,12 @@
 from datetime import date
 
-from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QDate, Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDateEdit,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -20,6 +21,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from src.history_window import HistoryWindow
 
 
 class EditEntryDialog(QDialog):
@@ -284,6 +287,7 @@ class MainWindow(QMainWindow):
         self.db = db
         self.timer = timer
         self.on_generate_report = on_generate_report
+        self.view_date = date.today()
         self._setup_ui()
         self.refresh()
 
@@ -311,11 +315,62 @@ class MainWindow(QMainWindow):
         title = QLabel("🍅 POMATO")
         title.setStyleSheet("color:white; font-size:18px; font-weight:bold;")
 
+        date_caption = QLabel("查看日期")
+        date_caption.setStyleSheet("color:rgba(255,255,255,0.85); font-size:13px;")
+
+        # ── day navigation arrows ──
+        arrow_style = (
+            "QPushButton { background:transparent; color:white; border:none;"
+            "  font-size:16px; padding:4px 6px; }"
+            "QPushButton:hover { background:rgba(255,255,255,0.2); border-radius:4px; }"
+        )
+
+        prev_day_btn = QPushButton("◀")
+        prev_day_btn.setFixedSize(30, 30)
+        prev_day_btn.setStyleSheet(arrow_style)
+        prev_day_btn.clicked.connect(self._prev_day)
+
+        next_day_btn = QPushButton("▶")
+        next_day_btn.setFixedSize(30, 30)
+        next_day_btn.setStyleSheet(arrow_style)
+        next_day_btn.clicked.connect(self._next_day)
+
+        self.view_date_edit = QDateEdit()
+        self.view_date_edit.setCalendarPopup(True)
+        self.view_date_edit.setDisplayFormat("yyyy-MM-dd")
+        self.view_date_edit.setDate(QDate.currentDate())
+        self.view_date_edit.setFixedWidth(148)
+        self.view_date_edit.setStyleSheet(
+            "QDateEdit { background:white; color:#333; border:none; border-radius:4px; padding:4px 10px; padding-right:24px; }"
+        )
+        self.view_date_edit.dateChanged.connect(self._on_view_date_changed)
+        calendar = self.view_date_edit.calendarWidget()
+        if calendar is not None:
+            calendar.setMinimumSize(420, 320)
+            calendar.setGridVisible(True)
+            calendar.setStyleSheet(
+                "QCalendarWidget QWidget { background:#ef5350; }"
+                "QCalendarWidget QToolButton { color:white; background:#ef5350; border:none; min-height:28px; min-width:28px; }"
+                "QCalendarWidget QToolButton:hover { background:#d84343; }"
+                "QCalendarWidget QAbstractSpinBox { min-width: 92px; padding: 2px 6px; }"
+                "QCalendarWidget QSpinBox { min-width: 92px; }"
+                "QCalendarWidget QMenu { background:white; }"
+            )
+
+        today_btn = QPushButton("今天")
+        today_btn.setStyleSheet(self._btn_style("#757575"))
+        today_btn.clicked.connect(self._jump_to_today)
+
         self.date_label = QLabel()
         self.date_label.setStyleSheet("color:rgba(255,255,255,0.85); font-size:13px;")
 
         hl.addWidget(title)
         hl.addStretch()
+        hl.addWidget(date_caption)
+        hl.addWidget(prev_day_btn)
+        hl.addWidget(self.view_date_edit)
+        hl.addWidget(next_day_btn)
+        hl.addWidget(today_btn)
         hl.addWidget(self.date_label)
         root.addWidget(header)
 
@@ -373,6 +428,15 @@ class MainWindow(QMainWindow):
         add_btn.setStyleSheet(self._btn_style("#5d4037"))
         add_btn.clicked.connect(self._on_add_entry)
 
+        self.history_btn = QPushButton("📚  历史日报")
+        self.history_btn.setStyleSheet(
+            "QPushButton { background:#ef5350; color:white; border:none;"
+            "  border-radius:5px; padding:8px 20px; font-size:13px; }"
+            "QPushButton:hover { border:1px solid rgba(255,255,255,0.5); }"
+            "QPushButton:disabled { background:#e0e0e0; color:#9e9e9e; border:1px solid #e0e0e0; }"
+        )
+        self.history_btn.clicked.connect(self._open_history_window)
+
         report_btn = QPushButton("📋  生成日报")
         report_btn.setStyleSheet(self._btn_style("#ef5350"))
         report_btn.clicked.connect(self._on_generate_report)
@@ -380,6 +444,7 @@ class MainWindow(QMainWindow):
         bl.addWidget(start_btn)
         bl.addWidget(add_btn)
         bl.addStretch()
+        bl.addWidget(self.history_btn)
         bl.addWidget(report_btn)
         root.addWidget(bottom)
 
@@ -399,10 +464,14 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def refresh(self):
-        today = date.today().isoformat()
-        self.date_label.setText(today)
+        selected_date = self.view_date
+        today = date.today()
+        date_str = selected_date.isoformat()
+        status = "今日" if selected_date == today else "历史"
+        self.date_label.setText(f"{date_str} · {status}")
+        self.history_btn.setEnabled(selected_date != today)
 
-        entries = self.db.get_entries_by_date(today)
+        entries = self.db.get_entries_by_date(date_str)
         completed = sum(1 for e in entries if not e.get("skipped"))
         self.pomodoro_count.setText(f"🍅 {completed} 个番茄钟")
         focus_min = completed * self.config.get("pomodoro_duration", 25)
@@ -418,7 +487,7 @@ class MainWindow(QMainWindow):
                 widget.deleteLater()
 
         if not entries:
-            empty = QLabel("今日暂无记录，开始你的第一个番茄钟吧 🍅")
+            empty = QLabel(f"{date_str} 暂无记录，开始你的第一个番茄钟吧 🍅")
             empty.setStyleSheet("color:#bbb; font-size:13px;")
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.entries_layout.insertWidget(0, empty)
@@ -441,6 +510,23 @@ class MainWindow(QMainWindow):
             mins, secs = divmod(remaining, 60)
             self.timer_status.setText(f"⏱ {label}  {mins:02d}:{secs:02d}")
 
+    def _on_view_date_changed(self, qdate: QDate):
+        self.view_date = qdate.toPyDate()
+        self.refresh()
+
+    def _jump_to_today(self):
+        self.view_date_edit.setDate(QDate.currentDate())
+
+    def _prev_day(self):
+        self.view_date_edit.setDate(self.view_date_edit.date().addDays(-1))
+
+    def _next_day(self):
+        self.view_date_edit.setDate(self.view_date_edit.date().addDays(1))
+
+    def _open_history_window(self):
+        if self.view_date != date.today():
+            HistoryWindow(self.db, self).exec()
+
     def _on_generate_report(self):
         if self.on_generate_report:
             self.on_generate_report()
@@ -459,15 +545,15 @@ class MainWindow(QMainWindow):
 
     def _on_add_entry(self):
         tags = self.config.get("custom_tags", [])
-        today = date.today().isoformat()
+        target_date = self.view_date.isoformat()
         added = 0
         while True:
             dlg = AddEntryDialog(tags, self)
             if dlg.exec() != QDialog.DialogCode.Accepted:
                 break
             start, end, content, selected_tags = dlg.get_values()
-            session_no = self.db.get_next_session_no(today)
-            self.db.add_entry(today, session_no, start, end, content, selected_tags, skipped=False)
+            session_no = self.db.get_next_session_no(target_date)
+            self.db.add_entry(target_date, session_no, start, end, content, selected_tags, skipped=False)
             added += 1
         if added:
             self.refresh()

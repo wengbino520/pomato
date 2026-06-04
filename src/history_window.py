@@ -44,7 +44,7 @@ class HistoryWindow(QDialog):
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("搜索日期或内容…")
         self.search_input.setStyleSheet(
-            "QLineEdit{background:white;border:none;border-radius:4px;padding:6px 10px;min-width:220px;}"
+            "QLineEdit{background:white;color:#333;border:none;border-radius:4px;padding:6px 10px;min-width:220px;}"
         )
         self.search_input.textChanged.connect(self._load_dates)
         hl.addWidget(self.search_input)
