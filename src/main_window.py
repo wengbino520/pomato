@@ -297,7 +297,7 @@ class MainWindow(QMainWindow):
 
     def _setup_ui(self):
         self.setWindowTitle("POMATO 番茄日志")
-        self.setMinimumSize(560, 500)
+        self.setMinimumSize(600, 460)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -314,9 +314,6 @@ class MainWindow(QMainWindow):
 
         title = QLabel("🍅 POMATO")
         title.setStyleSheet("color:white; font-size:18px; font-weight:bold;")
-
-        date_caption = QLabel("查看日期")
-        date_caption.setStyleSheet("color:rgba(255,255,255,0.85); font-size:13px;")
 
         # ── day navigation arrows ──
         arrow_style = (
@@ -366,7 +363,6 @@ class MainWindow(QMainWindow):
 
         hl.addWidget(title)
         hl.addStretch()
-        hl.addWidget(date_caption)
         hl.addWidget(prev_day_btn)
         hl.addWidget(self.view_date_edit)
         hl.addWidget(next_day_btn)
