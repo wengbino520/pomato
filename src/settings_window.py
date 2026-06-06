@@ -29,7 +29,7 @@ class SettingsWindow(QDialog):
     def _setup_ui(self):
         self.setWindowTitle("POMATO · 设置")
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowStaysOnTopHint)
-        self.resize(460, 540)
+        self.resize(460, 580)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -123,6 +123,10 @@ class SettingsWindow(QDialog):
         self.autostart_enabled = QCheckBox("开机自启动")
         mf.addRow("", self.autostart_enabled)
 
+        self.holiday_check = QCheckBox("自动识别法定节假日（非工作日不计时）")
+        self.holiday_check.setToolTip("通过 timor.tech API 获取中国法定节假日数据，\n法定假日及调休日自动识别。")
+        mf.addRow("", self.holiday_check)
+
         self.popup_timeout = QSpinBox()
         self.popup_timeout.setRange(30, 600)
         self.popup_timeout.setSuffix(" 秒")
@@ -208,6 +212,7 @@ class SettingsWindow(QDialog):
         self.system_prompt.setPlainText(self.config.get("report_system_prompt", ""))
         self.sound_enabled.setChecked(self.config.get("sound_enabled", True))
         self.autostart_enabled.setChecked(self.config.get("autostart_enabled", True))
+        self.holiday_check.setChecked(self.config.get("holiday_check_enabled", True))
         self.popup_timeout.setValue(self.config.get("popup_timeout_seconds", 180))
 
         self.tag_list.clear()
@@ -227,6 +232,7 @@ class SettingsWindow(QDialog):
         self.config.set("report_system_prompt", self.system_prompt.toPlainText().strip())
         self.config.set("sound_enabled", self.sound_enabled.isChecked())
         self.config.set("autostart_enabled", self.autostart_enabled.isChecked())
+        self.config.set("holiday_check_enabled", self.holiday_check.isChecked())
         self.config.set("popup_timeout_seconds", self.popup_timeout.value())
         self.config.sync_autostart()
         tags = []

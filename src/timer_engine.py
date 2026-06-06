@@ -3,6 +3,8 @@ from enum import Enum
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
+from src.holiday_manager import HolidayManager
+
 
 class TimerState(Enum):
     IDLE = "idle"
@@ -29,6 +31,7 @@ class TimerEngine(QObject):
         self._session_start = None
         self._today = None
         self._paused = False
+        self._holiday_manager = HolidayManager(self.config.get_data_dir())
 
         self._timer = QTimer(self)
         self._timer.setInterval(1000)
@@ -100,8 +103,21 @@ class TimerEngine(QObject):
         if self._state == TimerState.IDLE:
             start_str = self.config.get("work_start_time", "08:30")
             h, m = map(int, start_str.split(":"))
-            if now.time() >= time(h, m) and now.weekday() < 5:
+
+            # 判断今天是否为工作日
+            holiday_enabled = self.config.get("holiday_check_enabled", True)
+            if holiday_enabled:
+                is_workday = self._holiday_manager.is_workday(now.date())
+                holiday_name = self._holiday_manager.get_holiday_name(now.date())
+            else:
+                is_workday = now.weekday() < 5
+                holiday_name = None
+
+            if now.time() >= time(h, m) and is_workday:
                 self._start_work_session()
+            elif not is_workday and now.time() >= time(h, m):
+                label = f"非工作日 ({holiday_name or '周末'})"
+                self.tick.emit(-1, label)
             else:
                 self.tick.emit(-1, f"等待开始 ({start_str})")
             return

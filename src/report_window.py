@@ -113,6 +113,11 @@ class ReportWindow(QDialog):
         self.export_btn.setStyleSheet(self._btn_style("#388e3c"))
         self.export_btn.clicked.connect(self._export_markdown)
 
+        self.export_docx_btn = QPushButton("📄 导出 Word")
+        self.export_docx_btn.setEnabled(False)
+        self.export_docx_btn.setStyleSheet(self._btn_style("#1565c0"))
+        self.export_docx_btn.clicked.connect(self._export_docx)
+
         close_btn = QPushButton("关闭")
         close_btn.setStyleSheet(self._btn_style("#9e9e9e"))
         close_btn.clicked.connect(self.accept)
@@ -121,6 +126,7 @@ class ReportWindow(QDialog):
         bl.addStretch()
         bl.addWidget(self.copy_btn)
         bl.addWidget(self.export_btn)
+        bl.addWidget(self.export_docx_btn)
         bl.addWidget(close_btn)
         layout.addLayout(bl)
 
@@ -144,6 +150,7 @@ class ReportWindow(QDialog):
         self.regenerate_btn.setEnabled(False)
         self.copy_btn.setEnabled(False)
         self.export_btn.setEnabled(False)
+        self.export_docx_btn.setEnabled(False)
 
         self._worker = _AIWorker(self.ai_client, self.entries, self.report_date)
         self._worker.chunk_received.connect(self._on_chunk)
@@ -165,6 +172,7 @@ class ReportWindow(QDialog):
         self.regenerate_btn.setEnabled(True)
         self.copy_btn.setEnabled(True)
         self.export_btn.setEnabled(True)
+        self.export_docx_btn.setEnabled(True)
         self.db.save_report(self.report_date, self.entries, ai_summary=result, final_report=result)
 
     def _on_error(self, error_msg: str):
@@ -176,6 +184,7 @@ class ReportWindow(QDialog):
         self.editor.setPlainText(fallback)
         self.copy_btn.setEnabled(True)
         self.export_btn.setEnabled(True)
+        self.export_docx_btn.setEnabled(True)
         QMessageBox.warning(
             self,
             "AI 生成失败",
@@ -237,3 +246,98 @@ class ReportWindow(QDialog):
         plain = "\n".join(lines)
         plain = re.sub(r"\n{3,}", "\n\n", plain)
         return plain.strip() + "\n"
+
+    def _export_docx(self):
+        """将日报导出为 Word (.docx) 文件。"""
+        try:
+            from docx import Document
+            from docx.shared import Pt, Inches, RGBColor
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+        except ImportError:
+            QMessageBox.warning(
+                self, "缺少依赖",
+                "导出 Word 需要 python-docx 库。\n请运行: pip install python-docx"
+            )
+            return
+
+        default_name = f"日报_{self.report_date}.docx"
+        path, _ = QFileDialog.getSaveFileName(
+            self, "导出 Word 日报", default_name,
+            "Word 文档 (*.docx);;所有文件 (*)"
+        )
+        if not path:
+            return
+
+        markdown = self.editor.toPlainText()
+        doc = Document()
+
+        # Set default font
+        style = doc.styles["Normal"]
+        font = style.font
+        font.name = "Microsoft YaHei"
+        font.size = Pt(11)
+
+        for line in markdown.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                doc.add_paragraph("")
+                continue
+
+            if stripped.startswith("# "):
+                p = doc.add_paragraph()
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                run = p.add_run(stripped[2:])
+                run.bold = True
+                run.font.size = Pt(18)
+                run.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+            elif stripped.startswith("## "):
+                p = doc.add_paragraph()
+                run = p.add_run(stripped[3:])
+                run.bold = True
+                run.font.size = Pt(14)
+                run.font.color.rgb = RGBColor(0xE5, 0x39, 0x35)
+            elif stripped.startswith("### "):
+                p = doc.add_paragraph()
+                run = p.add_run(stripped[4:])
+                run.bold = True
+                run.font.size = Pt(12)
+                run.font.color.rgb = RGBColor(0x42, 0x42, 0x42)
+            elif stripped.startswith("- ") or stripped.startswith("* "):
+                p = doc.add_paragraph(stripped[2:], style="List Bullet")
+            elif stripped.startswith("> "):
+                p = doc.add_paragraph()
+                run = p.add_run(stripped[2:])
+                run.italic = True
+                run.font.color.rgb = RGBColor(0x75, 0x75, 0x75)
+            else:
+                # Handle inline bold (**text**) and italic (*text*)
+                p = doc.add_paragraph()
+                self._add_markdown_inline(p, stripped)
+
+        doc.save(path)
+        self.db.save_report(self.report_date, self.entries, final_report=markdown)
+        QMessageBox.information(self, "导出成功", f"日报已保存至：\n{path}")
+
+    @staticmethod
+    def _add_markdown_inline(paragraph, text: str):
+        """将带 Markdown 内联格式的文本添加到 Word 段落。"""
+        from docx.shared import Pt
+        import re as _re
+
+        # Split on **bold** and *italic* markers
+        pattern = _re.compile(r"(\*\*(.+?)\*\*|\*(.+?)\*)")
+        last_end = 0
+        for m in pattern.finditer(text):
+            # Text before the match
+            if m.start() > last_end:
+                paragraph.add_run(text[last_end:m.start()])
+            if m.group(2):  # **bold**
+                run = paragraph.add_run(m.group(2))
+                run.bold = True
+            elif m.group(3):  # *italic*
+                run = paragraph.add_run(m.group(3))
+                run.italic = True
+            last_end = m.end()
+        # Remaining text
+        if last_end < len(text):
+            paragraph.add_run(text[last_end:])

@@ -263,10 +263,12 @@ class TestStatusText:
 # ── 异常场景测试：自动启动逻辑（mock 时间） ──────────────────────────────────
 
 class TestAutoStart:
-    """_on_tick 的 IDLE 自动启动：工作日/周末、时间前后、整点边界。"""
+    """_on_tick 的 IDLE 自动启动：工作日/周末、时间前后、整点边界。
+    注意：这些测试关闭节假日 API 检查，仅测试 weekday 基础逻辑。"""
 
     def test_auto_start_on_weekday_after_start_time(self, engine, tmp_config):
         tmp_config.set("work_start_time", "08:30")
+        tmp_config.set("holiday_check_enabled", False)
         # 2026-06-01 是周一 09:00
         fixed = _real_dt(2026, 6, 1, 9, 0, 0)
         mock_dt, mock_d = _dt_mocks(fixed)
@@ -277,6 +279,7 @@ class TestAutoStart:
 
     def test_no_auto_start_before_work_time(self, engine, tmp_config):
         tmp_config.set("work_start_time", "08:30")
+        tmp_config.set("holiday_check_enabled", False)
         # 周一 08:00（在开始时间之前）
         fixed = _real_dt(2026, 6, 1, 8, 0, 0)
         mock_dt, mock_d = _dt_mocks(fixed)
@@ -287,6 +290,7 @@ class TestAutoStart:
 
     def test_no_auto_start_on_saturday(self, engine, tmp_config):
         tmp_config.set("work_start_time", "08:30")
+        tmp_config.set("holiday_check_enabled", False)
         # 2026-06-06 是周六 09:00
         fixed = _real_dt(2026, 6, 6, 9, 0, 0)
         mock_dt, mock_d = _dt_mocks(fixed)
@@ -297,6 +301,7 @@ class TestAutoStart:
 
     def test_no_auto_start_on_sunday(self, engine, tmp_config):
         tmp_config.set("work_start_time", "08:30")
+        tmp_config.set("holiday_check_enabled", False)
         # 2026-06-07 是周日 09:00
         fixed = _real_dt(2026, 6, 7, 9, 0, 0)
         mock_dt, mock_d = _dt_mocks(fixed)
@@ -308,6 +313,7 @@ class TestAutoStart:
     def test_auto_start_exactly_at_start_time(self, engine, tmp_config):
         """精确在 08:30:00 时应触发自动启动（>= 判断）。"""
         tmp_config.set("work_start_time", "08:30")
+        tmp_config.set("holiday_check_enabled", False)
         fixed = _real_dt(2026, 6, 1, 8, 30, 0)   # 周一 08:30:00
         mock_dt, mock_d = _dt_mocks(fixed)
         with patch("src.timer_engine.datetime", mock_dt), \
@@ -318,6 +324,7 @@ class TestAutoStart:
     def test_session_no_resets_on_new_day(self, engine, tmp_config):
         """跨天后 session_no 重置为 0。"""
         tmp_config.set("work_start_time", "08:30")
+        tmp_config.set("holiday_check_enabled", False)
         engine._today = "2026-06-01"
         engine._session_no = 5
         engine._state = TimerState.IDLE
@@ -331,3 +338,111 @@ class TestAutoStart:
 
         assert engine._today == "2026-06-02"
         assert engine._session_no == 0
+
+
+# ── 节假日感知自动启动测试 ─────────────────────────────────────────────────
+
+class TestAutoStartWithHoliday:
+    """_on_tick IDLE 状态下，结合 HolidayManager 的工作日判断。"""
+
+    def test_auto_start_when_holiday_manager_says_workday(self, engine, tmp_config):
+        """HolidayManager 判定工作日 → 应正常启动。"""
+        tmp_config.set("work_start_time", "08:30")
+        fixed = _real_dt(2026, 6, 1, 9, 0, 0)  # Monday
+        mock_dt, mock_d = _dt_mocks(fixed)
+
+        with patch.object(engine._holiday_manager, "is_workday", return_value=True), \
+             patch.object(engine._holiday_manager, "get_holiday_name", return_value=None), \
+             patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._on_tick()
+
+        assert engine.state == TimerState.WORK
+
+    def test_no_auto_start_on_holiday(self, engine, tmp_config):
+        """元旦（周一）但 API 标记为假日 → 不启动。"""
+        tmp_config.set("work_start_time", "08:30")
+        fixed = _real_dt(2026, 1, 1, 9, 0, 0)  # Jan 1, 2026 (Thursday that's a holiday)
+        mock_dt, mock_d = _dt_mocks(fixed)
+
+        with patch.object(engine._holiday_manager, "is_workday", return_value=False), \
+             patch.object(engine._holiday_manager, "get_holiday_name", return_value="元旦"), \
+             patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._on_tick()
+
+        assert engine.state == TimerState.IDLE
+
+    def test_workday_even_on_weekend_when_makeup(self, engine, tmp_config):
+        """调休补班的周日 → holiday=false → 应启动。"""
+        tmp_config.set("work_start_time", "08:30")
+        fixed = _real_dt(2026, 2, 15, 9, 0, 0)  # Sunday
+        mock_dt, mock_d = _dt_mocks(fixed)
+
+        with patch.object(engine._holiday_manager, "is_workday", return_value=True), \
+             patch.object(engine._holiday_manager, "get_holiday_name", return_value=None), \
+             patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._on_tick()
+
+        assert engine.state == TimerState.WORK
+
+    def test_holiday_check_disabled_uses_weekday_only(self, engine, tmp_config):
+        """关闭节假日检查时，回退到纯 weekday 判断（周六不启动）。"""
+        tmp_config.set("holiday_check_enabled", False)
+        tmp_config.set("work_start_time", "08:30")
+        fixed = _real_dt(2026, 6, 6, 9, 0, 0)  # Saturday
+        mock_dt, mock_d = _dt_mocks(fixed)
+
+        with patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._on_tick()
+
+        assert engine.state == TimerState.IDLE
+
+    def test_holiday_check_disabled_weekday_starts(self, engine, tmp_config):
+        """关闭节假日检查时，周一正常启动。"""
+        tmp_config.set("holiday_check_enabled", False)
+        tmp_config.set("work_start_time", "08:30")
+        fixed = _real_dt(2026, 6, 1, 9, 0, 0)  # Monday
+        mock_dt, mock_d = _dt_mocks(fixed)
+
+        with patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._on_tick()
+
+        assert engine.state == TimerState.WORK
+
+    def test_idle_tick_emits_holiday_label(self, engine, tmp_config):
+        """非工作日 IDLE 状态下 tick 信号携带节日标签。"""
+        tmp_config.set("work_start_time", "08:30")
+        fixed = _real_dt(2026, 1, 1, 9, 0, 0)
+        mock_dt, mock_d = _dt_mocks(fixed)
+
+        labels = []
+        engine.tick.connect(lambda rem, lbl: labels.append(lbl))
+
+        with patch.object(engine._holiday_manager, "is_workday", return_value=False), \
+             patch.object(engine._holiday_manager, "get_holiday_name", return_value="元旦"), \
+             patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._on_tick()
+
+        assert any("元旦" in lbl for lbl in labels)
+
+    def test_idle_tick_emits_weekend_label_when_no_holiday_name(self, engine, tmp_config):
+        """普通周末（无节日名时）tick 信号显示"周末"。"""
+        tmp_config.set("work_start_time", "08:30")
+        fixed = _real_dt(2026, 6, 6, 9, 0, 0)  # Saturday
+        mock_dt, mock_d = _dt_mocks(fixed)
+
+        labels = []
+        engine.tick.connect(lambda rem, lbl: labels.append(lbl))
+
+        with patch.object(engine._holiday_manager, "is_workday", return_value=False), \
+             patch.object(engine._holiday_manager, "get_holiday_name", return_value=None), \
+             patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._on_tick()
+
+        assert any("周末" in lbl for lbl in labels)

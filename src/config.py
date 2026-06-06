@@ -21,6 +21,7 @@ DEFAULT_CONFIG = {
     "report_system_prompt": "",
     "autostart_enabled": True,
     "popup_timeout_seconds": 180,
+    "holiday_check_enabled": True,
 }
 
 

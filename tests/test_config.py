@@ -45,6 +45,12 @@ class TestConfigDefaults:
         for expected in ["开发", "测试", "文档", "会议", "研究", "其他"]:
             assert expected in tags
 
+    def test_default_holiday_check_enabled_is_true(self, tmp_config):
+        assert tmp_config.get("holiday_check_enabled") is True
+
+    def test_default_popup_timeout(self, tmp_config):
+        assert tmp_config.get("popup_timeout_seconds") == 180
+
 
 class TestConfigPersistence:
     """set() 写入磁盘，新实例重新加载后读取到正确值。"""
@@ -89,6 +95,16 @@ class TestConfigPersistence:
         with patch("pathlib.Path.home", return_value=tmp_path):
             Config()
         assert (tmp_path / ".pomato" / "config.json").exists()
+
+    def test_holiday_check_persists_after_reload(self, tmp_path):
+        """holiday_check_enabled 关闭后重新加载仍为 False。"""
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            c = Config()
+            c.set("holiday_check_enabled", False)
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            c2 = Config()
+        assert c2.get("holiday_check_enabled") is False
 
 
 # ── 边界值测试 ─────────────────────────────────────────────────────────────────
