@@ -36,6 +36,7 @@ from PyQt6.QtWidgets import QApplication
 
 from src.config import Config
 from src.database import Database
+from src.reminder_engine import ReminderEngine
 from src.timer_engine import TimerEngine
 from src.tray_manager import TrayManager
 
@@ -48,10 +49,13 @@ def main():
 
     config = Config()
     db = Database()
-    timer = TimerEngine(config)
+
+    # ---- TASK-20: 初始化 ReminderEngine ----
+    reminder_engine = ReminderEngine(config, db)
+    timer = TimerEngine(config, reminder_engine=reminder_engine)
     timer.restore_session_no(db)   # NFR-03: restore today's count after restart
 
-    tray = TrayManager(app, config, db, timer)
+    tray = TrayManager(app, config, db, timer, reminder_engine=reminder_engine)
     tray.setup()
 
     timer.start()

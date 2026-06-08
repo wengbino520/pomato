@@ -1,3 +1,4 @@
+from collections import deque
 from datetime import date
 
 from PyQt6.QtCore import QObject, Qt, pyqtSlot
@@ -8,22 +9,25 @@ from src.ai_client import AIClient
 from src.history_window import HistoryWindow
 from src.main_window import MainWindow
 from src.popup_window import PopupWindow
+from src.reminder_popup import ReminderPopup
 from src.report_window import ReportWindow
 from src.settings_window import SettingsWindow
 
 
 class TrayManager(QObject):
-    def __init__(self, app, config, db, timer):
+    def __init__(self, app, config, db, timer, reminder_engine=None):
         super().__init__()
         self.app = app
         self.config = config
         self.db = db
         self.timer = timer
+        self._reminder_engine = reminder_engine
         self.ai_client = AIClient(config)
 
         self.tray: QSystemTrayIcon | None = None
         self.main_window: MainWindow | None = None
-        self._active_popup: PopupWindow | None = None
+        self._active_popup: PopupWindow | ReminderPopup | None = None
+        self._popup_queue: deque[ReminderPopup] = deque(maxlen=2)
 
     # ------------------------------------------------------------------
     # Setup
@@ -64,6 +68,14 @@ class TrayManager(QObject):
 
         menu.addSeparator()
 
+        # ---- TASK-16: 待办 + 提醒菜单项 ----
+        if self._reminder_engine:
+            todo_action = menu.addAction("📋  待办")
+            todo_action.triggered.connect(self._show_todo_dialog)
+            reminder_action = menu.addAction("⏰  提醒")
+            reminder_action.triggered.connect(self._show_reminder_dialog)
+            menu.addSeparator()
+
         quit_action = menu.addAction("退出")
         quit_action.triggered.connect(self.app.quit)
 
@@ -76,6 +88,12 @@ class TrayManager(QObject):
         self.timer.break_ended.connect(self._on_break_ended)
         self.timer.tick.connect(self._on_tick)
         self.timer.state_changed.connect(self._on_state_changed)
+
+        # ---- TASK-17: ReminderEngine 信号接线 ----
+        if self._reminder_engine:
+            self._reminder_engine.reminder_triggered.connect(
+                self._on_reminder_triggered
+            )
 
         # Pre-create main window (hidden)
         self.main_window = MainWindow(
@@ -238,6 +256,7 @@ class TrayManager(QObject):
 
         def on_destroyed(_obj=None):
             self._active_popup = None
+            self._show_next_queued()
 
         popup.submitted.connect(on_submitted)
         popup.skipped.connect(on_skipped)
@@ -275,7 +294,61 @@ class TrayManager(QObject):
         win.exec()
 
     def show_settings(self):
-        SettingsWindow(self.config).exec()
+        SettingsWindow(self.config, reminder_engine=self._reminder_engine).exec()
 
     def show_history_window(self):
         HistoryWindow(self.db).exec()
+
+    # ------------------------------------------------------------------
+    # TASK-15/16/17: Reminder popup queue + dialog launchers
+    # ------------------------------------------------------------------
+
+    @pyqtSlot(int, str, str)
+    def _on_reminder_triggered(self, reminder_id: int, title: str, remind_time: str):
+        popup = ReminderPopup(
+            reminder_id, title, remind_time,
+            on_snooze=self._on_reminder_snoozed,
+            on_dismiss=self._on_reminder_dismissed,
+        )
+        timeout = self.config.get("reminder_popup_timeout_seconds", 120)
+        popup.set_timeout(timeout)
+
+        if self._active_popup is None:
+            self._active_popup = popup
+            popup.destroyed.connect(lambda: self._on_popup_closed())
+            popup.show_and_focus()
+        else:
+            self._popup_queue.append(popup)
+
+    def _on_popup_closed(self):
+        self._active_popup = None
+        self._show_next_queued()
+
+    def _show_next_queued(self):
+        if self._active_popup is not None:
+            return
+        while self._popup_queue:
+            popup = self._popup_queue.popleft()
+            if popup.isVisible():
+                continue
+            self._active_popup = popup
+            popup.destroyed.connect(lambda: self._on_popup_closed())
+            popup.show_and_focus()
+            return
+
+    def _on_reminder_snoozed(self, reminder_id: int):
+        if self._reminder_engine:
+            self._reminder_engine.snooze_reminder(reminder_id)
+
+    def _on_reminder_dismissed(self, reminder_id: int):
+        pass  # Already marked triggered in engine
+
+    def _show_todo_dialog(self):
+        from src.todo_dialog import TodoDialog
+        if self._reminder_engine:
+            TodoDialog(self._reminder_engine).exec()
+
+    def _show_reminder_dialog(self):
+        from src.reminder_dialog import ReminderDialog
+        if self._reminder_engine:
+            ReminderDialog(self._reminder_engine).exec()
