@@ -1247,6 +1247,118 @@ Phase A (立即实现)        Phase B (观察反馈)        Phase C (基于反�
 | Phase A | 方案四 · 托盘 + 独立弹窗 | **零改动** | 3-4 天 |
 | Phase B | 方案二 · Tab 标签页 | +40 行, -2 文件 | 1-2 天 |
 
+## 16. User Story &amp; Task 完成状态追踪
+
+> 图例：✅ 已完成  ⚠️ 部分完成  ❌ 未实现
+> 每个 Task ID 对应 `/memories/repo/phase-a-tasks.md` 中的 TASK-N。
+
+---
+
+### US-7 待办管理 —— 规划今日要做什么
+
+> "作为用户，我希望上班前能快速列出今天要做的事，按优先级排列；番茄记录时可一键关联完成"
+
+| Task ID | 描述 | 状态 | 对应 TASK | 代码位置 |
+|---------|------|------|-----------|----------|
+| US7-T1 | 数据库 `todos` 表创建 | ❌ | TASK-01 | `database.py` · `_init_db()` |
+| US7-T2 | 数据库待办 CRUD（add/get/update/delete/reorder/carry_over） | ❌ | TASK-02 | `database.py` · 7 方法 |
+| US7-T3 | Config 新增 4 个 key（结转/静默/超时/显示已完成） | ❌ | TASK-04 | `config.py` · `DEFAULT_CONFIG` |
+| US7-T4 | ReminderEngine 待办管理 + `todos_changed` 信号 | ❌ | TASK-05 | `reminder_engine.py` · add_todo/update_todo/delete_todo/get_todos |
+| US7-T5 | 未完成待办自动结转至次日 | ❌ | TASK-07 | `reminder_engine.py` · `carry_over_pending_todos()` |
+| US7-T6 | TodoListWidget 待办列表组件（卡片列表+拖拽排序+优先级色条） | ❌ | TASK-09 | `todo_list_widget.py` |
+| US7-T7 | TodoDialog 待办弹窗（~30行薄壳包装） | ❌ | TASK-12 | `todo_dialog.py` |
+| US7-T8 | 托盘右键菜单「📋 待办」→ 打开 TodoDialog | ❌ | TASK-16 | `tray_manager.py` · `_show_todo_dialog()` |
+| US7-T9 | 番茄弹窗关联待办下拉 + 一键标记完成 | ❌ | TASK-21 | `popup_window.py` · QComboBox + QCheckBox |
+| US7-T10 | 设置项：未完成待办自动结转开关 | ❌ | TASK-18 | `settings_window.py` · `todo_carry_over` |
+
+---
+
+### US-8 定时提醒 —— 到点强弹窗不遗忘
+
+> "作为用户，我可以为重要事项设定具体提醒时间（如15:00 开会），到点强弹窗提醒；支持重复提醒"
+
+| Task ID | 描述 | 状态 | 对应 TASK | 代码位置 |
+|---------|------|------|-----------|----------|
+| US8-T1 | 数据库 `reminders` 表创建 | ❌ | TASK-01 | `database.py` · `_init_db()` |
+| US8-T2 | 数据库提醒 CRUD（add/get/update/delete/mark_triggered） | ❌ | TASK-03 | `database.py` · 7 方法 |
+| US8-T3 | ReminderEngine 提醒管理 + `on_tick()` 时间匹配 + RepeatType 枚举 | ❌ | TASK-06 | `reminder_engine.py` · `_reload_reminders/on_tick` |
+| US8-T4 | TimerEngine._on_tick() 末尾集成 1 行调用 | ❌ | TASK-08 | `timer_engine.py` · `if self._reminder_engine:` |
+| US8-T5 | ReminderListWidget 提醒列表组件（QListWidget+启用禁用开关） | ❌ | TASK-10 | `reminder_list_widget.py` |
+| US8-T6 | ReminderDialog 提醒管理弹窗（~30行薄壳） | ❌ | TASK-13 | `reminder_dialog.py` |
+| US8-T7 | ReminderPopup 到点强弹窗（置顶+提示音+延后/知道了） | ❌ | TASK-11 | `reminder_popup.py` |
+| US8-T8 | 弹窗队列机制（FIFO, deque maxlen=2, 番茄弹窗优先） | ❌ | TASK-15 | `tray_manager.py` · `_popup_queue` + `_show_next_queued()` |
+| US8-T9 | TrayManager 信号接线：`reminder_triggered → _on_reminder_triggered` | ❌ | TASK-17 | `tray_manager.py` · `setup()` |
+| US8-T10 | 托盘右键菜单「⏰ 提醒」→ 打开 ReminderDialog | ❌ | TASK-16 | `tray_manager.py` · `_show_reminder_dialog()` |
+| US8-T11 | 设置面板「提醒管理」分组（增删改启用禁用+编辑弹窗） | ❌ | TASK-19 | `settings_window.py` · QGroupBox + QListWidget |
+| US8-T12 | 设置项：非工作时间静默 + 提醒弹窗超时 | ❌ | TASK-18 | `settings_window.py` · `reminder_silent` + `reminder_timeout` |
+| US8-T13 | main.py 初始化 ReminderEngine 并传入各处 | ❌ | TASK-20 | `main.py` + `TimerEngine` + `TrayManager` 构造函数 |
+
+---
+
+### US-9 今日看板增强 —— 待办+番茄同屏（Phase B 远期）
+
+> "作为用户，今日看板同时展示「待办列表」+「已完成记录」，一目了然"
+
+| Task ID | 描述 | 状态 | 阶段 | 代码位置 |
+|---------|------|------|------|----------|
+| US9-T1 | MainWindow 新增 QTabWidget（🍅番茄/📋待办/⏰提醒），复用 TodoListWidget + ReminderListWidget | ❌ | Phase B | `main_window.py` |
+| US9-T2 | 标题栏显示「待办完成进度 X/Y」 | ❌ | Phase B | `main_window.py` · header stats |
+| US9-T3 | 删除 TodoDialog / ReminderDialog 两个薄壳 | ❌ | Phase B | 移除 `todo_dialog.py` + `reminder_dialog.py` |
+| US9-T4 | 托盘右键菜单改为切换 Tab（或保留 Dialog 快捷入口） | ❌ | Phase B | `tray_manager.py` |
+
+---
+
+### US-10 AI 日报增强 —— 注入待办完成情况（远期）
+
+> "作为用户，AI 日报能引用今日待办的完成情况（完成了 X/Y 项计划任务）"
+
+| Task ID | 描述 | 状态 | 优先级 | 代码位置 |
+|---------|------|------|--------|----------|
+| US10-T1 | Prompt 中注入今日待办完成情况 | ❌ | P2 | `ai_client.py` · `build_prompt()` |
+| US10-T2 | 日报概览显示「计划 X 项，完成 Y 项，完成率 Z%」 | ❌ | P2 | `report_window.py` · 概览区块 |
+
+---
+
+### 非功能需求（v2.0 新增）
+
+| NFR | 描述 | 状态 | 备注 |
+|-----|------|------|------|
+| NFR-06 | 提醒触发延迟 &lt; 1s（基于 1s tick） | ❌ | ReminderEngine.on_tick() 纯内存 O(n) |
+| NFR-07 | 新增模块后内存增长 &lt; 10MB | ❌ | — |
+| NFR-08 | 不影响现有番茄钟计时、弹窗、AI 日报 | ❌ | 全量回归测试 |
+| NFR-09 | 待办可独立使用（不强制启动番茄计时） | ❌ | — |
+
+---
+
+### 完成度汇总
+
+| 模块 | 总 Task 数 | ✅ 已完成 | ⚠️ 部分 | ❌ 未实现 |
+|------|-----------|----------|---------|----------|
+| US-7 待办管理 | 10 | 0 | 0 | 10 |
+| US-8 定时提醒 | 13 | 0 | 0 | 13 |
+| US-9 看板增强 | 4 | 0 | 0 | 4 |
+| US-10 AI增强 | 2 | 0 | 0 | 2 |
+| NFR (v2) | 4 | 0 | 0 | 4 |
+| **合计 (v2.0)** | **33** | **0 (0%)** | **0 (0%)** | **33 (100%)** |
+
+---
+
+### 下一步开发顺序
+
+| 检查点 | Task 范围 | 预估 | 关键产出 |
+|--------|----------|------|----------|
+| 🔴 **CP-1** | TASK-01~04 | 1.5h | 数据库表 + CRUD + Config |
+| 🔴 **CP-2** | TASK-05~07 | 2h | ReminderEngine 核心逻辑 |
+| 🔴 **CP-3** | TASK-08 | 10min | TimerEngine 集成 |
+| 🟡 **CP-4** | TASK-09~11 | 4h | UI 组件三件套 |
+| 🟡 **CP-5** | TASK-12~13 | 20min | 薄壳 Dialog ×2 |
+| 🟡 **CP-6** | TASK-14~21 | 3.5h | Tray/设置/main 全集成 |
+| 🟢 **CP-7** | TASK-22~29 | 4h | 全部测试 + 全量回归 |
+| ⏳ Phase B | US-9 | 1-2天 | Tab 迁入 |
+| ⏳ 远期 | US-10 | 0.5天 | AI 日报增强 |
+
+> 📋 详细任务依赖图见 `/memories/repo/phase-a-tasks.md`（29 子任务 · 7 检查点 · 依赖排序）
+
 ---
 
 > **文档结束**  
