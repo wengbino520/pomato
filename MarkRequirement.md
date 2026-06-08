@@ -322,16 +322,16 @@ CREATE TABLE settings (
 
 | Task ID | 描述 | 状态 | 代码位置 |
 |---------|------|------|----------|
-| US1-T1 | 工作/短休/长休 状态机 | ✅ | `timer_engine.py` · `TimerState` |
-| US1-T2 | 每日到达设定时间自动启动（默认 08:30） | ✅ | `timer_engine.py` · `_on_tick` |
-| US1-T3 | 仅工作日（周一~五）自动启动 | ✅ | `timer_engine.py` · `now.weekday() < 5` |
-| US1-T4 | 每4个番茄钟触发长休息 | ✅ | `timer_engine.py` · `_handle_session_end` |
-| US1-T5 | 托盘图标实时倒计时 tooltip | ✅ | `tray_manager.py` · `_on_tick` |
-| US1-T6 | 托盘菜单状态文字（工作中/休息中） | ✅ | `tray_manager.py` · `status_action` |
-| US1-T7 | 手动开始按钮（今日看板） | ✅ | `main_window.py` · `start_btn` |
-| US1-T8 | 暂停 / 继续（后端已实现，UI未接入） | ✅ | `tray_manager.py` · `pause_action` / `_on_pause_resume` |
-| US1-T9 | 跳过当前休息（后端已实现，UI未接入） | ✅ | `tray_manager.py` · `skip_break_action` |
-| US1-T10 | 节假日不自动启动（可配置日历） | ✅ | `holiday_manager.py` + `timer_engine.py`
+| US1-T1 | 工作/短休/长休 状态机 | ✅ | `services/timer_engine.py` · `TimerState` |
+| US1-T2 | 每日到达设定时间自动启动（默认 08:30） | ✅ | `services/timer_engine.py` · `_on_tick` |
+| US1-T3 | 仅工作日（周一~五）自动启动 | ✅ | `services/timer_engine.py` · `now.weekday() < 5` |
+| US1-T4 | 每4个番茄钟触发长休息 | ✅ | `services/timer_engine.py` · `_handle_session_end` |
+| US1-T5 | 托盘图标实时倒计时 tooltip | ✅ | `app.py` · `_on_tick` |
+| US1-T6 | 托盘菜单状态文字（工作中/休息中） | ✅ | `app.py` · `status_action` |
+| US1-T7 | 手动开始按钮（今日看板） | ✅ | `ui/main_window.py` · `start_btn` |
+| US1-T8 | 暂停 / 继续（后端已实现，UI未接入） | ✅ | `app.py` · `pause_action` / `_on_pause_resume` |
+| US1-T9 | 跳过当前休息（后端已实现，UI未接入） | ✅ | `app.py` · `skip_break_action` |
+| US1-T10 | 节假日不自动启动（可配置日历） | ✅ | `services/holiday_manager.py` + `services/timer_engine.py`
 
 ---
 
@@ -341,17 +341,17 @@ CREATE TABLE settings (
 
 | Task ID | 描述 | 状态 | 代码位置 |
 |---------|------|------|----------|
-| US2-T1 | 工作时段结束自动触发弹窗 | ✅ | `tray_manager.py` · `_on_work_session_ended` |
-| US2-T2 | 弹窗强制置顶、抢占焦点 | ✅ | `popup_window.py` · `show_and_focus` / `ctypes` |
-| US2-T3 | 自由文本输入框 | ✅ | `popup_window.py` · `QTextEdit` |
-| US2-T4 | 多选标签（来自配置） | ✅ | `popup_window.py` · `tag_buttons` |
-| US2-T5 | "跳过本轮"按钮 | ✅ | `popup_window.py` · `_on_skip` |
-| US2-T6 | Ctrl+Enter 快捷键提交 | ✅ | `popup_window.py` · `QShortcut` |
-| US2-T7 | 提交后自动关闭、进入休息计时 | ✅ | `popup_window.py` · `accept()` → timer 继续 |
-| US2-T8 | 休息结束托盘气泡通知 | ✅ | `tray_manager.py` · `_on_break_ended` |
-| US2-T9 | 弹窗提示音 | ✅ | `tray_manager.py` · `winsound.MessageBeep` |
-| US2-T10 | 超时3分钟自动标记"未记录" | ✅ | `popup_window.py` + `tray_manager.py` |
-| US2-T11 | "重复上一条"快捷按钮 | ✅ | `popup_window.py` + `database.py` |
+| US2-T1 | 工作时段结束自动触发弹窗 | ✅ | `app.py` · `_on_work_session_ended` |
+| US2-T2 | 弹窗强制置顶、抢占焦点 | ✅ | `ui/popup_window.py` · `show_and_focus` / `ctypes` |
+| US2-T3 | 自由文本输入框 | ✅ | `ui/popup_window.py` · `QTextEdit` |
+| US2-T4 | 多选标签（来自配置） | ✅ | `ui/popup_window.py` · `tag_buttons` |
+| US2-T5 | "跳过本轮"按钮 | ✅ | `ui/popup_window.py` · `_on_skip` |
+| US2-T6 | Ctrl+Enter 快捷键提交 | ✅ | `ui/popup_window.py` · `QShortcut` |
+| US2-T7 | 提交后自动关闭、进入休息计时 | ✅ | `ui/popup_window.py` · `accept()` → timer 继续 |
+| US2-T8 | 休息结束托盘气泡通知 | ✅ | `app.py` · `_on_break_ended` |
+| US2-T9 | 弹窗提示音 | ✅ | `app.py` · `winsound.MessageBeep` |
+| US2-T10 | 超时3分钟自动标记"未记录" | ✅ | `ui/popup_window.py` + `app.py` |
+| US2-T11 | "重复上一条"快捷按钮 | ✅ | `ui/popup_window.py` + `core/database.py` |
 
 ---
 
@@ -361,14 +361,14 @@ CREATE TABLE settings (
 
 | Task ID | 描述 | 状态 | 代码位置 |
 |---------|------|------|----------|
-| US3-T1 | 今日条目时间轴列表展示 | ✅ | `main_window.py` · `EntryItem` |
-| US3-T2 | 已完成番茄钟数量统计 | ✅ | `main_window.py` · `pomodoro_count` |
-| US3-T3 | 总专注时长统计（分钟） | ✅ | `main_window.py` · `focus_time` label |
-| US3-T4 | 双击托盘图标打开主窗口 | ✅ | `tray_manager.py` · `_on_tray_activated` |
-| US3-T5 | 关闭主窗口最小化到托盘 | ✅ | `main_window.py` · `closeEvent` |
-| US3-T6 | 条目内联编辑 UI | ✅ | `main_window.py` · `EditEntryDialog` / `_on_edit_entry` |
-| US3-T7 | 条目删除 UI | ✅ | `main_window.py` · `_on_delete_entry` |
-| US3-T8 | 手动补录条目（填写时间段+内容） | ✅ | `main_window.py` · `AddEntryDialog` / `_on_add_entry` |
+| US3-T1 | 今日条目时间轴列表展示 | ✅ | `ui/main_window.py` · `EntryItem` |
+| US3-T2 | 已完成番茄钟数量统计 | ✅ | `ui/main_window.py` · `pomodoro_count` |
+| US3-T3 | 总专注时长统计（分钟） | ✅ | `ui/main_window.py` · `focus_time` label |
+| US3-T4 | 双击托盘图标打开主窗口 | ✅ | `app.py` · `_on_tray_activated` |
+| US3-T5 | 关闭主窗口最小化到托盘 | ✅ | `ui/main_window.py` · `closeEvent` |
+| US3-T6 | 条目内联编辑 UI | ✅ | `ui/main_window.py` · `EditEntryDialog` / `_on_edit_entry` |
+| US3-T7 | 条目删除 UI | ✅ | `ui/main_window.py` · `_on_delete_entry` |
+| US3-T8 | 手动补录条目（填写时间段+内容） | ✅ | `ui/main_window.py` · `AddEntryDialog` / `_on_add_entry` |
 
 ---
 
@@ -378,14 +378,14 @@ CREATE TABLE settings (
 
 | Task ID | 描述 | 状态 | 代码位置 |
 |---------|------|------|----------|
-| US4-T1 | OpenAI 兼容 API 对接 | ✅ | `ai_client.py` · `AIClient` |
-| US4-T2 | Prompt 构建（注入日期/标签/时长） | ✅ | `ai_client.py` · `build_prompt` |
-| US4-T3 | 流式输出（打字机效果） | ✅ | `report_window.py` · `_AIWorker` + `chunk_received` |
-| US4-T4 | AI 失败时兜底展示原始记录 | ✅ | `report_window.py` · `_on_error` / `_generate_fallback` |
-| US4-T5 | 重新生成按钮 | ✅ | `report_window.py` · `regenerate_btn` |
-| US4-T6 | 自定义 Prompt 模板（UI配置） | ✅ | `settings_window.py` + `ai_client.py` |
-| US4-T7 | Ollama 本地模型一键切换 | ✅ | `settings_window.py` · `_apply_ollama_profile` |
-| US4-T8 | 日报存入数据库（可查历史） | ✅ | `database.py` · `save_report` |
+| US4-T1 | OpenAI 兼容 API 对接 | ✅ | `services/ai_client.py` · `AIClient` |
+| US4-T2 | Prompt 构建（注入日期/标签/时长） | ✅ | `services/ai_client.py` · `build_prompt` |
+| US4-T3 | 流式输出（打字机效果） | ✅ | `ui/report_window.py` · `_AIWorker` + `chunk_received` |
+| US4-T4 | AI 失败时兜底展示原始记录 | ✅ | `ui/report_window.py` · `_on_error` / `_generate_fallback` |
+| US4-T5 | 重新生成按钮 | ✅ | `ui/report_window.py` · `regenerate_btn` |
+| US4-T6 | 自定义 Prompt 模板（UI配置） | ✅ | `ui/settings_window.py` + `services/ai_client.py` |
+| US4-T7 | Ollama 本地模型一键切换 | ✅ | `ui/settings_window.py` · `_apply_ollama_profile` |
+| US4-T8 | 日报存入数据库（可查历史） | ✅ | `core/database.py` · `save_report` |
 
 ---
 
@@ -395,13 +395,13 @@ CREATE TABLE settings (
 
 | Task ID | 描述 | 状态 | 代码位置 |
 |---------|------|------|----------|
-| US5-T1 | 日报全文可编辑（富文本框） | ✅ | `report_window.py` · `self.editor` |
-| US5-T2 | 导出为 Markdown 文件（.md） | ✅ | `report_window.py` · `_export_markdown` |
-| US5-T3 | 一键复制到剪贴板 | ✅ | `report_window.py` · `_copy_to_clipboard` |
-| US5-T4 | 导出为纯文本（钉钉/飞书直接粘贴格式） | ✅ | `report_window.py` · `_markdown_to_plain_text` |
-| US5-T5 | 历史日报列表 UI（按日期查阅） | ✅ | `history_window.py` · `HistoryWindow` |
-| US5-T6 | 日报内容搜索 | ✅ | `history_window.py` + `database.py` · `search_reports` |
-| US5-T7 | 导出 Word / PDF | ✅ | `report_window.py` · `_export_docx` (Word) |
+| US5-T1 | 日报全文可编辑（富文本框） | ✅ | `ui/report_window.py` · `self.editor` |
+| US5-T2 | 导出为 Markdown 文件（.md） | ✅ | `ui/report_window.py` · `_export_markdown` |
+| US5-T3 | 一键复制到剪贴板 | ✅ | `ui/report_window.py` · `_copy_to_clipboard` |
+| US5-T4 | 导出为纯文本（钉钉/飞书直接粘贴格式） | ✅ | `ui/report_window.py` · `_markdown_to_plain_text` |
+| US5-T5 | 历史日报列表 UI（按日期查阅） | ✅ | `ui/history_window.py` · `HistoryWindow` |
+| US5-T6 | 日报内容搜索 | ✅ | `ui/history_window.py` + `core/database.py` · `search_reports` |
+| US5-T7 | 导出 Word / PDF | ✅ | `ui/report_window.py` · `_export_docx` (Word) |
 
 ---
 
@@ -411,13 +411,13 @@ CREATE TABLE settings (
 
 | Task ID | 描述 | 状态 | 代码位置 |
 |---------|------|------|----------|
-| US6-T1 | 计时参数配置（开始时间/番茄时长/休息时长） | ✅ | `settings_window.py` + `config.py` |
-| US6-T2 | AI 接口配置（Base URL / Key / 模型名） | ✅ | `settings_window.py` |
-| US6-T3 | 配置持久化到 JSON 文件 | ✅ | `config.py` · `~/.pomato/config.json` |
-| US6-T4 | 提示音开关配置 | ✅ | `settings_window.py` · `sound_enabled`（存储） |
-| US6-T5 | 自定义标签增删 UI | ✅ | `settings_window.py` · `tag_list` / `_add_tag` / `_del_tag` |
-| US6-T6 | 开机自启动 | ✅ | `settings_window.py` + `config.py`（Windows Run 注册表） |
-| US6-T7 | API Key 加密存储（非明文） | ✅ | `config.py`（DPAPI/XOR 加密落盘） |
+| US6-T1 | 计时参数配置（开始时间/番茄时长/休息时长） | ✅ | `ui/settings_window.py` + `core/config.py` |
+| US6-T2 | AI 接口配置（Base URL / Key / 模型名） | ✅ | `ui/settings_window.py` |
+| US6-T3 | 配置持久化到 JSON 文件 | ✅ | `core/config.py` · `~/.pomato/config.json` |
+| US6-T4 | 提示音开关配置 | ✅ | `ui/settings_window.py` · `sound_enabled`（存储） |
+| US6-T5 | 自定义标签增删 UI | ✅ | `ui/settings_window.py` · `tag_list` / `_add_tag` / `_del_tag` |
+| US6-T6 | 开机自启动 | ✅ | `ui/settings_window.py` + `core/config.py`（Windows Run 注册表） |
+| US6-T7 | API Key 加密存储（非明文） | ✅ | `core/config.py`（DPAPI/XOR 加密落盘） |
 
 ---
 
@@ -427,7 +427,7 @@ CREATE TABLE settings (
 |-----|------|------|------|
 | NFR-01 | 离线可用（计时+记录） | ✅ | 仅 AI 汇总需联网 |
 | NFR-02 | 数据本地 SQLite | ✅ | `~/.pomato/pomato.db` |
-| NFR-03 | 意外关闭后恢复当日数据 | ✅ | `timer_engine.py` · `restore_session_no()` 启动时调用 |
+| NFR-03 | 意外关闭后恢复当日数据 | ✅ | `services/timer_engine.py` · `restore_session_no()` 启动时调用 |
 | NFR-04 | 轻量内存 < 100MB | 未测试 | — |
 | NFR-05 | 安装包打包（exe） | ✅ | `POMATO.spec` + `build.bat` (PyInstaller) |
 
@@ -443,8 +443,26 @@ CREATE TABLE settings (
 | US-4 AI汇总 | 8 | 8 | 0 | 0 |
 | US-5 日报导出 | 7 | 7 | 0 | 0 |
 | US-6 配置中心 | 7 | 7 | 0 | 0 |
+| 待办事项 + 定时提醒 (CP-7) | 8 | 8 | 0 | 0 |
 | NFR | 5 | 4 | 0 | 1 |
-| **合计** | **56** | **55 (98%)** | **0 (0%)** | **1 (2%)** |
+| **合计** | **64** | **63 (98%)** | **0 (0%)** | **1 (2%)** |
+
+---
+
+### 四层架构
+
+代码已按依赖逆序重组为 4 层：
+
+| 层 | 目录 | 职责 | 模块 |
+|----|------|------|------|
+| L1 基础设施 | `src/core/` | 零依赖工具层 | Config, Database |
+| L2 业务逻辑 | `src/services/` | 仅依赖 L1 | TimerEngine, ReminderEngine, AIClient, HolidayManager |
+| L3 表示层 | `src/ui/` | 依赖 L1+L2 | 10 个窗口/弹窗/组件 |
+| L4 编排层 | `src/app.py` | 依赖所有层 | TrayManager（系统托盘 + 模块装配） |
+
+### 测试覆盖
+
+- 11 个测试文件，**320** 单元测试，全量通过（pytest -q, ~10s）
 
 ---
 
@@ -452,6 +470,6 @@ CREATE TABLE settings (
 
 | 优先级 | Task | 预估工作量 |
 |--------|------|-----------|
-| � 中 | NFR-04 轻量内存 < 100MB 压测与优化 | 2h |
-| 🟢 低 | 完善单元测试覆盖率（当前仅 5 个测试文件） | 4h |
+| 🟡 中 | NFR-04 轻量内存 < 100MB 压测与优化 | 2h |
 | 🟢 低 | CI/CD 自动构建与发布流程 | 3h |
+| 🟢 低 | macOS/Linux 跨平台兼容性测试 | 4h |

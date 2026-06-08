@@ -154,31 +154,47 @@ pytest
 POMATO/
 ├── main.py                  # 入口：初始化组件、启动事件循环
 ├── run.bat / run.sh         # 启动脚本（DLL 隔离 / 虚拟环境检测）
+├── build.bat                # PyInstaller 打包脚本
 ├── requirements.txt         # 生产依赖
 ├── requirements-dev.txt     # 开发依赖（pytest）
 ├── pytest.ini               # 测试配置
 ├── README.md
 ├── MarkRequirement.md       # 完整需求分析 & 任务追踪
 │
-├── src/
-│   ├── config.py            # 配置管理（JSON 持久化、API Key 加密、开机自启注册表）
-│   ├── database.py          # SQLite 数据层（条目 CRUD、日报存取、搜索）
-│   ├── timer_engine.py      # 计时引擎（状态机：空闲→工作→短休→长休、暂停/跳过）
-│   ├── popup_window.py      # 弹窗记录器（强制置顶、标签选择、Ctrl+Enter 提交、超时处理）
-│   ├── main_window.py       # 主窗口 · 今日看板（条目时间轴、编辑/删除/补录、日期导航）
-│   ├── report_window.py     # 日报窗口（AI 流式生成、编辑、导出 Markdown/文本、复制）
-│   ├── history_window.py    # 历史日报窗口（日期列表、内容预览、关键词搜索）
-│   ├── settings_window.py   # 设置面板（所有可配项 UI）
-│   ├── ai_client.py         # AI 客户端（OpenAI 兼容接口、Prompt 构建、Ollama 支持）
-│   └── tray_manager.py      # 系统托盘管理（菜单、气泡通知、弹窗调度）
+├── src/                     # 四层架构：core → services → ui → app
+│   ├── app.py               # L4 编排层 — 系统托盘管理 + 模块装配
+│   ├── core/                # L1 基础设施层（零依赖，纯工具）
+│   │   ├── config.py        #   配置管理（JSON 持久化、API Key 加密、开机自启）
+│   │   └── database.py      #   SQLite 数据层（条目/日报/待办/提醒 CRUD）
+│   ├── services/            # L2 业务逻辑层（仅依赖 core/）
+│   │   ├── ai_client.py     #   AI 客户端（OpenAI 兼容接口、Prompt 构建、Ollama）
+│   │   ├── holiday_manager.py # 中国节假日识别
+│   │   ├── timer_engine.py  #   计时引擎（状态机：空闲→工作→短休→长休）
+│   │   └── reminder_engine.py # 待办 + 定时提醒引擎
+│   └── ui/                  # L3 表示层（依赖 core/ + services/）
+│       ├── popup_window.py  #   番茄完成弹窗（强制置顶、标签、Ctrl+Enter）
+│       ├── reminder_popup.py #  提醒强弹窗
+│       ├── main_window.py   #   主窗口 · 今日看板
+│       ├── settings_window.py # 设置面板
+│       ├── report_window.py #   日报窗口（AI 流式生成、编辑、导出）
+│       ├── history_window.py #  历史日报窗口
+│       ├── todo_dialog.py   #   待办事项弹窗
+│       ├── reminder_dialog.py # 提醒管理弹窗
+│       ├── todo_list_widget.py # 待办列表组件
+│       └── reminder_list_widget.py # 提醒列表组件
 │
-└── tests/
+└── tests/                   # 320 个单元测试
     ├── conftest.py
     ├── test_config.py
-    ├── test_database.py
+    ├── test_database.py     (+ test_database_todos.py / test_database_reminders.py)
     ├── test_ai_client.py
+    ├── test_holiday_manager.py
     ├── test_timer_engine.py
-    └── test_main_window.py
+    ├── test_reminder_engine.py
+    ├── test_popup_queue.py
+    ├── test_reminder_popup.py
+    ├── test_main_window.py
+    └── test_report_window.py
 ```
 
 ---
@@ -208,14 +224,19 @@ pywin32 >= 306          (Windows only)
 
 ## 开发进度
 
-| 模块 | 完成度 |
-|------|--------|
-| 计时引擎 | 90%（节假日检测未实现） |
-| 弹窗记录 | 100% |
-| 今日看板 | 100% |
-| AI 汇总 | 100% |
-| 日报导出 | 86%（Word/PDF 未实现） |
-| 配置中心 | 100% |
+| 模块 | 完成度 | 代码位置 |
+|------|--------|----------|
+| 计时引擎 + 节假日 | 100% | `services/timer_engine.py` + `services/holiday_manager.py` |
+| 弹窗记录 | 100% | `ui/popup_window.py` |
+| 今日看板 | 100% | `ui/main_window.py` |
+| AI 汇总 | 100% | `services/ai_client.py` + `ui/report_window.py` |
+| 日报导出（含 Word） | 100% | `ui/report_window.py` |
+| 历史日报 | 100% | `ui/history_window.py` |
+| 配置中心 | 100% | `core/config.py` + `ui/settings_window.py` |
+| 系统托盘 + 装配 | 100% | `app.py` |
+| 待办 + 提醒 | 100% | `services/reminder_engine.py` + `ui/reminder_*.py` + `ui/todo_*.py` |
+
+> 测试覆盖：320 单元测试，全量通过
 
 > 详细任务追踪见 [`MarkRequirement.md`](MarkRequirement.md)
 
