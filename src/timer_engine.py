@@ -22,9 +22,10 @@ class TimerEngine(QObject):
     tick = pyqtSignal(int, str)
     state_changed = pyqtSignal(str)
 
-    def __init__(self, config):
+    def __init__(self, config, reminder_engine=None):
         super().__init__()
         self.config = config
+        self._reminder_engine = reminder_engine
         self._state = TimerState.IDLE
         self._remaining = 0
         self._session_no = 0
@@ -92,6 +93,10 @@ class TimerEngine(QObject):
     def _on_tick(self):
         if self._paused:
             return
+
+        # ---- ReminderEngine 集成 (TASK-08) ----
+        if self._reminder_engine:
+            self._reminder_engine.on_tick()
 
         now = datetime.now()
         today = date.today().isoformat()
