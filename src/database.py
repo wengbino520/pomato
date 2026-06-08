@@ -43,7 +43,54 @@ class Database:
 
                 CREATE INDEX IF NOT EXISTS idx_entries_date
                     ON pomodoro_entries(date);
+
+                CREATE TABLE IF NOT EXISTS todos (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title       TEXT    NOT NULL,
+                    priority    INTEGER NOT NULL DEFAULT 1,
+                    status      TEXT    NOT NULL DEFAULT 'pending',
+                    todo_date   TEXT    NOT NULL,
+                    due_date    TEXT,
+                    note        TEXT    DEFAULT '',
+                    sort_order  INTEGER NOT NULL DEFAULT 0,
+                    pomodoro_id INTEGER,
+                    created_at  TEXT    NOT NULL,
+                    updated_at  TEXT    NOT NULL,
+                    FOREIGN KEY (pomodoro_id) REFERENCES pomodoro_entries(id) ON DELETE SET NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status);
+                CREATE INDEX IF NOT EXISTS idx_todos_due_date ON todos(due_date);
+
+                CREATE TABLE IF NOT EXISTS reminders (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title       TEXT    NOT NULL,
+                    remind_time TEXT    NOT NULL,
+                    repeat_type TEXT    NOT NULL DEFAULT 'none',
+                    repeat_days TEXT    DEFAULT '',
+                    enabled     INTEGER NOT NULL DEFAULT 1,
+                    snooze_min  INTEGER NOT NULL DEFAULT 10,
+                    last_triggered TEXT,
+                    created_at  TEXT    NOT NULL,
+                    updated_at  TEXT    NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_reminders_enabled ON reminders(enabled);
             """)
+
+            # Migration: add todo_date column if missing (added in TASK-02)
+            try:
+                conn.execute("ALTER TABLE todos ADD COLUMN todo_date TEXT")
+            except Exception:
+                pass
+            # Backfill: set todo_date from created_at date for existing rows
+            conn.execute(
+                "UPDATE todos SET todo_date = substr(created_at, 1, 10) WHERE todo_date IS NULL"
+            )
+            try:
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_todos_todo_date ON todos(todo_date)")
+            except Exception:
+                pass
 
     def add_entry(self, date_str, session_no, start_time, end_time,
                   content, tags=None, skipped=False):
@@ -170,3 +217,168 @@ class Database:
             d["raw_entries"] = json.loads(d["raw_entries"])
             result.append(d)
         return result
+
+    # ------------------------------------------------------------------
+    # Todo CRUD methods (TASK-02)
+    # ------------------------------------------------------------------
+
+    def add_todo(self, title, priority=1, due_date=None, note="", todo_date=None):
+        now = datetime.now().isoformat()
+        if todo_date is None:
+            todo_date = datetime.now().strftime("%Y-%m-%d")
+        with self._get_conn() as conn:
+            cursor = conn.execute(
+                """INSERT INTO todos
+                   (title, priority, status, todo_date, due_date, note, sort_order, created_at, updated_at)
+                   VALUES (?, ?, 'pending', ?, ?, ?, 0, ?, ?)""",
+                (title, priority, todo_date, due_date, note, now, now),
+            )
+            return cursor.lastrowid
+
+    def get_todos(self, date_str=None, include_done=True):
+        with self._get_conn() as conn:
+            if date_str:
+                if include_done:
+                    rows = conn.execute(
+                        """SELECT * FROM todos WHERE todo_date=?
+                           ORDER BY priority DESC, sort_order ASC""",
+                        (date_str,),
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        """SELECT * FROM todos WHERE todo_date=? AND status != 'done'
+                           ORDER BY priority DESC, sort_order ASC""",
+                        (date_str,),
+                    ).fetchall()
+            else:
+                if include_done:
+                    rows = conn.execute(
+                        "SELECT * FROM todos ORDER BY priority DESC, sort_order ASC",
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        """SELECT * FROM todos WHERE status != 'done'
+                           ORDER BY priority DESC, sort_order ASC""",
+                    ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_todo(self, todo_id):
+        with self._get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM todos WHERE id=?", (todo_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def update_todo(self, todo_id, **kwargs):
+        if not kwargs:
+            return
+        allowed = {"title", "priority", "status", "due_date", "note", "sort_order", "pomodoro_id", "todo_date"}
+        updates = {k: v for k, v in kwargs.items() if k in allowed}
+        if not updates:
+            return
+        updates["updated_at"] = datetime.now().isoformat()
+        set_clause = ", ".join(f"{k}=?" for k in updates)
+        values = list(updates.values()) + [todo_id]
+        with self._get_conn() as conn:
+            conn.execute(f"UPDATE todos SET {set_clause} WHERE id=?", values)
+
+    def delete_todo(self, todo_id):
+        with self._get_conn() as conn:
+            conn.execute("DELETE FROM todos WHERE id=?", (todo_id,))
+
+    def reorder_todos(self, ordered_ids):
+        now = datetime.now().isoformat()
+        with self._get_conn() as conn:
+            for idx, tid in enumerate(ordered_ids):
+                conn.execute(
+                    "UPDATE todos SET sort_order=?, updated_at=? WHERE id=?",
+                    (idx, now, tid),
+                )
+
+    def carry_over_todos(self, yesterday_str, today_str):
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                """SELECT * FROM todos
+                   WHERE todo_date=? AND status IN ('pending', 'in_progress')""",
+                (yesterday_str,),
+            ).fetchall()
+            now = datetime.now().isoformat()
+            count = 0
+            max_order = conn.execute(
+                "SELECT COALESCE(MAX(sort_order), -1) as mo FROM todos WHERE todo_date=?",
+                (today_str,),
+            ).fetchone()["mo"]
+            for row in rows:
+                count += 1
+                max_order += 1
+                conn.execute(
+                    """INSERT INTO todos
+                       (title, priority, status, todo_date, due_date, note, sort_order, pomodoro_id, created_at, updated_at)
+                       VALUES (?, ?, 'pending', ?, ?, ?, ?, NULL, ?, ?)""",
+                    (row["title"], row["priority"], today_str,
+                     row["due_date"], row["note"], max_order, now, now),
+                )
+            return count
+
+    # ------------------------------------------------------------------
+    # Reminder CRUD methods (TASK-03)
+    # ------------------------------------------------------------------
+
+    def add_reminder(self, title, remind_time, repeat_type="none",
+                     repeat_days="", snooze_min=10):
+        now = datetime.now().isoformat()
+        with self._get_conn() as conn:
+            cursor = conn.execute(
+                """INSERT INTO reminders
+                   (title, remind_time, repeat_type, repeat_days, enabled, snooze_min, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, 1, ?, ?, ?)""",
+                (title, remind_time, repeat_type, repeat_days, snooze_min, now, now),
+            )
+            return cursor.lastrowid
+
+    def get_enabled_reminders(self):
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM reminders WHERE enabled=1 ORDER BY remind_time",
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_reminder(self, reminder_id):
+        with self._get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM reminders WHERE id=?", (reminder_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_all_reminders(self):
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM reminders ORDER BY remind_time",
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_reminder(self, reminder_id, **kwargs):
+        if not kwargs:
+            return
+        allowed = {"title", "remind_time", "repeat_type", "repeat_days",
+                   "enabled", "snooze_min", "last_triggered"}
+        updates = {k: v for k, v in kwargs.items() if k in allowed}
+        if not updates:
+            return
+        updates["updated_at"] = datetime.now().isoformat()
+        set_clause = ", ".join(f"{k}=?" for k in updates)
+        values = list(updates.values()) + [reminder_id]
+        with self._get_conn() as conn:
+            conn.execute(f"UPDATE reminders SET {set_clause} WHERE id=?", values)
+
+    def delete_reminder(self, reminder_id):
+        with self._get_conn() as conn:
+            conn.execute("DELETE FROM reminders WHERE id=?", (reminder_id,))
+
+    def mark_reminder_triggered(self, reminder_id, date_str):
+        now = datetime.now().isoformat()
+        with self._get_conn() as conn:
+            conn.execute(
+                "UPDATE reminders SET last_triggered=?, updated_at=? WHERE id=?",
+                (date_str, now, reminder_id),
+            )
