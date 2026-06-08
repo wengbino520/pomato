@@ -60,3 +60,14 @@ def engine(qapp, tmp_config):
     """
     from src.timer_engine import TimerEngine
     return TimerEngine(tmp_config)
+
+
+# ── ReminderEngine ────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def reminder_engine(qapp, tmp_config, tmp_db):
+    """
+    ReminderEngine 实例，使用隔离 Config + Database。
+    """
+    from src.reminder_engine import ReminderEngine
+    return ReminderEngine(tmp_config, tmp_db)

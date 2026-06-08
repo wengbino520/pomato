@@ -1,0 +1,201 @@
+"""
+TASK-22: 数据库待办方法测试
+tests/test_database_todos.py
+"""
+import pytest
+from datetime import datetime
+
+
+class TestAddTodo:
+    """add_todo 基本正确性。"""
+
+    def test_add_todo_returns_positive_id(self, tmp_db):
+        tid = tmp_db.add_todo("测试待办")
+        assert isinstance(tid, int)
+        assert tid > 0
+
+    def test_add_todo_with_priority_and_due_date(self, tmp_db):
+        tid = tmp_db.add_todo("高优任务", priority=2, due_date="2026-06-15")
+        todo = tmp_db.get_todo(tid)
+        assert todo["title"] == "高优任务"
+        assert todo["priority"] == 2
+        assert todo["due_date"] == "2026-06-15"
+        assert todo["status"] == "pending"
+
+    def test_add_todo_defaults(self, tmp_db):
+        tid = tmp_db.add_todo("默认值测试")
+        todo = tmp_db.get_todo(tid)
+        assert todo["priority"] == 1
+        assert todo["status"] == "pending"
+        assert todo["note"] == ""
+        assert todo["sort_order"] == 0
+
+    def test_add_todo_with_note(self, tmp_db):
+        tid = tmp_db.add_todo("带备注", note="这是一段备注文字")
+        todo = tmp_db.get_todo(tid)
+        assert todo["note"] == "这是一段备注文字"
+
+    def test_add_todo_with_explicit_todo_date(self, tmp_db):
+        tid = tmp_db.add_todo("特定日期", todo_date="2026-06-10")
+        todo = tmp_db.get_todo(tid)
+        assert todo["todo_date"] == "2026-06-10"
+
+    def test_add_todo_todo_date_defaults_to_today(self, tmp_db):
+        tid = tmp_db.add_todo("今天")
+        today = datetime.now().strftime("%Y-%m-%d")
+        todo = tmp_db.get_todo(tid)
+        assert todo["todo_date"] == today
+
+
+class TestGetTodos:
+    """get_todos 查询正确性。"""
+
+    def test_get_todos_returns_list(self, tmp_db):
+        assert tmp_db.get_todos() == []
+
+    def test_get_todos_by_date(self, tmp_db):
+        tmp_db.add_todo("A", todo_date="2026-06-01")
+        tmp_db.add_todo("B", todo_date="2026-06-02")
+        assert len(tmp_db.get_todos(date_str="2026-06-01")) == 1
+        assert len(tmp_db.get_todos(date_str="2026-06-02")) == 1
+
+    def test_get_todos_sorted_by_priority_desc(self, tmp_db):
+        tmp_db.add_todo("低", priority=0, todo_date="2026-06-01")
+        tmp_db.add_todo("高", priority=2, todo_date="2026-06-01")
+        tmp_db.add_todo("中", priority=1, todo_date="2026-06-01")
+        todos = tmp_db.get_todos(date_str="2026-06-01")
+        assert [t["title"] for t in todos] == ["高", "中", "低"]
+
+    def test_get_todos_excludes_done_when_include_done_false(self, tmp_db):
+        tid = tmp_db.add_todo("待完成", todo_date="2026-06-01")
+        tmp_db.add_todo("已完成", todo_date="2026-06-01")
+        # Mark second as done
+        tmp_db.update_todo(tmp_db.add_todo("T", todo_date="2026-06-01"), status="done")
+        todos = tmp_db.get_todos(date_str="2026-06-01", include_done=False)
+        titles = [t["title"] for t in todos]
+        assert "待完成" in titles
+        # All should be non-done
+        assert all(t["status"] != "done" for t in todos)
+
+    def test_get_todos_includes_done_by_default(self, tmp_db):
+        tid = tmp_db.add_todo("Done", todo_date="2026-06-01")
+        tmp_db.update_todo(tid, status="done")
+        todos = tmp_db.get_todos(date_str="2026-06-01")
+        assert len(todos) == 1
+
+
+class TestGetTodo:
+    """get_todo 单条查询。"""
+
+    def test_get_todo_returns_dict(self, tmp_db):
+        tid = tmp_db.add_todo("X")
+        todo = tmp_db.get_todo(tid)
+        assert isinstance(todo, dict)
+        assert todo["title"] == "X"
+
+    def test_get_todo_returns_none_for_missing(self, tmp_db):
+        assert tmp_db.get_todo(99999) is None
+
+
+class TestUpdateTodo:
+    """update_todo 修改正确性。"""
+
+    def test_update_title(self, tmp_db):
+        tid = tmp_db.add_todo("旧标题")
+        tmp_db.update_todo(tid, title="新标题")
+        assert tmp_db.get_todo(tid)["title"] == "新标题"
+
+    def test_update_status(self, tmp_db):
+        tid = tmp_db.add_todo("任务")
+        tmp_db.update_todo(tid, status="done")
+        assert tmp_db.get_todo(tid)["status"] == "done"
+
+    def test_update_multiple_fields(self, tmp_db):
+        tid = tmp_db.add_todo("多字段")
+        tmp_db.update_todo(tid, priority=2, due_date="2026-12-31", note="备注")
+        t = tmp_db.get_todo(tid)
+        assert t["priority"] == 2
+        assert t["due_date"] == "2026-12-31"
+        assert t["note"] == "备注"
+
+    def test_update_ignores_unknown_fields(self, tmp_db):
+        tid = tmp_db.add_todo("X")
+        tmp_db.update_todo(tid, unknown_field="bad")  # should not crash
+        assert tmp_db.get_todo(tid) is not None
+
+    def test_update_noop_with_empty_kwargs(self, tmp_db):
+        tid = tmp_db.add_todo("X")
+        tmp_db.update_todo(tid)  # should not crash
+        assert tmp_db.get_todo(tid)["title"] == "X"
+
+
+class TestDeleteTodo:
+    """delete_todo 删除。"""
+
+    def test_delete_todo_removes_record(self, tmp_db):
+        tid = tmp_db.add_todo("待删除")
+        tmp_db.delete_todo(tid)
+        assert tmp_db.get_todo(tid) is None
+
+    def test_delete_nonexistent_todo_no_error(self, tmp_db):
+        tmp_db.delete_todo(99999)  # should not raise
+
+
+class TestReorderTodos:
+    """reorder_todos 排序。"""
+
+    def test_reorder_updates_sort_order(self, tmp_db):
+        id1 = tmp_db.add_todo("A", todo_date="2026-06-01")
+        id2 = tmp_db.add_todo("B", todo_date="2026-06-01")
+        id3 = tmp_db.add_todo("C", todo_date="2026-06-01")
+
+        tmp_db.reorder_todos([id3, id1, id2])
+        todos = tmp_db.get_todos(date_str="2026-06-01")
+        assert [t["id"] for t in todos] == [id3, id1, id2]
+
+    def test_reorder_empty_list_no_error(self, tmp_db):
+        tmp_db.reorder_todos([])  # should not raise
+
+
+class TestCarryOverTodos:
+    """carry_over_todos 跨天结转。"""
+
+    def test_carry_over_copies_pending_to_today(self, tmp_db):
+        tmp_db.add_todo("结转任务", todo_date="2026-06-01", priority=2)
+        count = tmp_db.carry_over_todos("2026-06-01", "2026-06-02")
+        assert count == 1
+        todos = tmp_db.get_todos(date_str="2026-06-02")
+        assert len(todos) == 1
+        assert todos[0]["title"] == "结转任务"
+        assert todos[0]["status"] == "pending"
+
+    def test_carry_over_skips_done_todos(self, tmp_db):
+        tid = tmp_db.add_todo("已完成", todo_date="2026-06-01")
+        tmp_db.update_todo(tid, status="done")
+        count = tmp_db.carry_over_todos("2026-06-01", "2026-06-02")
+        assert count == 0
+
+    def test_carry_over_empty_returns_zero(self, tmp_db):
+        count = tmp_db.carry_over_todos("2026-06-01", "2026-06-02")
+        assert count == 0
+
+    def test_carry_over_preserves_due_date_and_note(self, tmp_db):
+        tmp_db.add_todo("带备注", todo_date="2026-06-01",
+                        due_date="2026-06-30", note="重要")
+        tmp_db.carry_over_todos("2026-06-01", "2026-06-02")
+        t = tmp_db.get_todos(date_str="2026-06-02")[0]
+        assert t["due_date"] == "2026-06-30"
+        assert t["note"] == "重要"
+
+
+class TestEdgeCases:
+    """边界情况。"""
+
+    def test_empty_title_allowed(self, tmp_db):
+        tid = tmp_db.add_todo("")
+        assert tmp_db.get_todo(tid)["title"] == ""
+
+    def test_very_long_title(self, tmp_db):
+        long_title = "A" * 500
+        tid = tmp_db.add_todo(long_title)
+        assert len(tmp_db.get_todo(tid)["title"]) == 500
