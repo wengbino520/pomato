@@ -306,7 +306,7 @@ erDiagram
 
 ## 11. 核心模块设计
 
-### 11.1 `src/reminder_engine.py` —— 新增核心模块
+### 11.1 `src/ui/reminder_engine.py` —— 新增核心模块
 
 ```python
 """
@@ -463,7 +463,7 @@ class ReminderEngine(QObject):
             self.reminder_triggered.emit(r["id"], r["title"], r["remind_time"])
 ```
 
-### 11.2 `src/database.py` —— 新增方法
+### 11.2 `src/core/database.py` —— 新增方法
 
 ```python
 # ==================== 待办 ====================
@@ -593,7 +593,7 @@ def get_all_reminders(self):
   └──────────────────────────────────────────────────┘
 ```
 
-### 11.4 `src/reminder_popup.py` —— 提醒弹窗（新增文件）
+### 11.4 `src/ui/reminder_popup.py` —— 提醒弹窗（新增文件）
 
 ```python
 """
@@ -920,33 +920,33 @@ class MainWindow(QMainWindow):
 
 | 操作 | 文件路径 | 说明 |
 |------|----------|------|
-| **新增** | `src/reminder_engine.py` | 待办 + 提醒引擎 |
-| **新增** | `src/todo_list_widget.py` | 待办列表组件（自包含，可嵌入任何容器） |
-| **新增** | `src/reminder_list_widget.py` | 提醒列表组件（同上） |
-| **新增** | `src/todo_dialog.py` | 待办弹窗——薄壳 QDialog 包装 TodoListWidget |
-| **新增** | `src/reminder_dialog.py` | 提醒管理弹窗——薄壳 QDialog 包装 ReminderListWidget |
-| **新增** | `src/reminder_popup.py` | 提醒弹窗组件（到点强弹窗） |
-| 修改 | `src/database.py` | 新增 todos/reminders 表和方法（+~120 行） |
-| 修改 | `src/config.py` | DEFAULT_CONFIG 扩展（+4 个 key） |
-| 修改 | `src/timer_engine.py` | `_on_tick()` 末尾增加 1 行调用 |
-| 修改 | `src/tray_manager.py` | 新增 2 个右键菜单项 + ReminderEngine 信号接线 + 弹窗队列 |
-| 修改 | `src/popup_window.py` | 番茄弹窗增加关联待办下拉（+~20 行） |
-| 修改 | `src/settings_window.py` | 设置面板增加提醒管理和 3 个配置项 |
+| **新增** | `src/ui/reminder_engine.py` | 待办 + 提醒引擎 |
+| **新增** | `src/ui/todo_list_widget.py` | 待办列表组件（自包含，可嵌入任何容器） |
+| **新增** | `src/ui/reminder_list_widget.py` | 提醒列表组件（同上） |
+| **新增** | `src/ui/todo_dialog.py` | 待办弹窗——薄壳 QDialog 包装 TodoListWidget |
+| **新增** | `src/ui/reminder_dialog.py` | 提醒管理弹窗——薄壳 QDialog 包装 ReminderListWidget |
+| **新增** | `src/ui/reminder_popup.py` | 提醒弹窗组件（到点强弹窗） |
+| 修改 | `src/core/database.py` | 新增 todos/reminders 表和方法（+~120 行） |
+| 修改 | `src/core/config.py` | DEFAULT_CONFIG 扩展（+4 个 key） |
+| 修改 | `src/services/timer_engine.py` | `_on_tick()` 末尾增加 1 行调用 |
+| 修改 | `src/app.py` | 新增 2 个右键菜单项 + ReminderEngine 信号接线 + 弹窗队列 |
+| 修改 | `src/ui/popup_window.py` | 番茄弹窗增加关联待办下拉（+~20 行） |
+| 修改 | `src/ui/settings_window.py` | 设置面板增加提醒管理和 3 个配置项 |
 | 修改 | `main.py` | 初始化 ReminderEngine 并传入 TrayManager |
-| **不动** | `src/main_window.py` | **零改动** |
+| **不动** | `src/ui/main_window.py` | **零改动** |
 | **新增** | `tests/test_reminder_engine.py` | 提醒引擎测试（30+ 用例） |
 | **新增** | `tests/test_reminder_popup.py` | 提醒弹窗测试（10+ 用例） |
 | **新增** | `tests/test_popup_queue.py` | 弹窗队列测试（8+ 用例） |
-| 修改 | `MarkRequirement.md` | 更新功能追踪表格 |
+| 修改 | `docs/requirements.md` | 更新功能追踪表格 |
 
 ### Phase B — 迁入方案二：Tab 标签页
 
 | 操作 | 文件路径 | 说明 |
 |------|----------|------|
-| 修改 | `src/main_window.py` | 新增 QTabWidget，嵌入 TodoListWidget + ReminderListWidget（+~40 行） |
-| **删除** | `src/todo_dialog.py` | ~30 行薄壳，不再需要 |
-| **删除** | `src/reminder_dialog.py` | ~30 行薄壳，不再需要 |
-| 可选 | `src/tray_manager.py` | 右键菜单改为切换 Tab（或保留 Dialog 入口作为快捷方式） |
+| 修改 | `src/ui/main_window.py` | 新增 QTabWidget，嵌入 TodoListWidget + ReminderListWidget（+~40 行） |
+| **删除** | `src/ui/todo_dialog.py` | ~30 行薄壳，不再需要 |
+| **删除** | `src/ui/reminder_dialog.py` | ~30 行薄壳，不再需要 |
+| 可选 | `src/app.py` | 右键菜单改为切换 Tab（或保留 Dialog 入口作为快捷方式） |
 
 > **关键**：Phase B 迁移时，`TodoListWidget` 和 `ReminderListWidget` **不需要任何修改**。数据层、引擎、测试全部不动。
 

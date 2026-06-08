@@ -159,7 +159,10 @@ POMATO/
 ├── requirements-dev.txt     # 开发依赖（pytest）
 ├── pytest.ini               # 测试配置
 ├── README.md
-├── MarkRequirement.md       # 完整需求分析 & 任务追踪
+├── docs/                    # 需求 & 设计文档
+│   ├── README.md            #   文档索引
+│   ├── requirements.md      #   完整需求分析 & 任务追踪
+│   └── todo-reminder-design.md  # 待办 + 提醒模块设计
 │
 ├── src/                     # 四层架构：core → services → ui → app
 │   ├── app.py               # L4 编排层 — 系统托盘管理 + 模块装配
@@ -238,7 +241,7 @@ pywin32 >= 306          (Windows only)
 
 > 测试覆盖：320 单元测试，全量通过
 
-> 详细任务追踪见 [`MarkRequirement.md`](MarkRequirement.md)
+> 详细任务追踪见 [`docs/requirements.md`](docs/requirements.md)
 
 ---
 
