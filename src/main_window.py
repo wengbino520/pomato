@@ -489,6 +489,8 @@ class MainWindow(QMainWindow):
             self.entries_layout.insertWidget(0, empty)
         else:
             for i, entry in enumerate(entries):
+                # 按时间排序后重新编号，确保显示序号连贯统一
+                entry["session_no"] = i + 1
                 item = EntryItem(entry)
                 item.edit_requested.connect(self._on_edit_entry)
                 item.delete_requested.connect(self._on_delete_entry)

@@ -35,12 +35,13 @@ class TestAddAndQuery:
         assert len(entries) == 1
         assert entries[0]["content"] == "完成了登录功能"
 
-    def test_entries_sorted_by_session_no(self, tmp_db):
-        add(tmp_db, session_no=3, content="C")
-        add(tmp_db, session_no=1, content="A")
-        add(tmp_db, session_no=2, content="B")
-        session_nos = [e["session_no"] for e in tmp_db.get_entries_by_date("2026-06-02")]
-        assert session_nos == [1, 2, 3]
+    def test_entries_sorted_by_start_time(self, tmp_db):
+        add(tmp_db, session_no=3, start="10:00:00", content="C")
+        add(tmp_db, session_no=1, start="09:00:00", content="A")
+        add(tmp_db, session_no=2, start="09:30:00", content="B")
+        # 应按 start_time 排序，而非 session_no
+        contents = [e["content"] for e in tmp_db.get_entries_by_date("2026-06-02")]
+        assert contents == ["A", "B", "C"]
 
     def test_tags_deserialized_as_list(self, tmp_db):
         add(tmp_db, tags=["开发", "测试"])
@@ -104,6 +105,28 @@ class TestSessionCount:
         add(tmp_db, date="2026-06-01", session_no=1, skipped=False)
         add(tmp_db, date="2026-06-02", session_no=1, skipped=False)
         assert tmp_db.get_today_session_count("2026-06-02") == 1
+
+    def test_get_next_session_no_empty_date(self, tmp_db):
+        assert tmp_db.get_next_session_no("2026-06-02") == 1
+
+    def test_get_next_session_no_after_manual_adds(self, tmp_db):
+        add(tmp_db, session_no=1, content="手动1")
+        add(tmp_db, session_no=2, content="手动2")
+        assert tmp_db.get_next_session_no("2026-06-02") == 3
+
+    def test_get_next_session_no_ignores_other_dates(self, tmp_db):
+        add(tmp_db, date="2026-06-01", session_no=5)
+        assert tmp_db.get_next_session_no("2026-06-02") == 1
+
+    def test_get_latest_valid_entry_content_by_time(self, tmp_db):
+        add(tmp_db, session_no=1, start="09:00:00", content="第一个")
+        add(tmp_db, session_no=2, start="10:00:00", content="第二个")
+        assert tmp_db.get_latest_valid_entry_content("2026-06-02") == "第二个"
+
+    def test_get_latest_valid_entry_skips_empty_content(self, tmp_db):
+        add(tmp_db, session_no=1, start="09:00:00", content="有效")
+        add(tmp_db, session_no=2, start="10:00:00", content="")
+        assert tmp_db.get_latest_valid_entry_content("2026-06-02") == "有效"
 
 
 class TestUpdateAndDelete:

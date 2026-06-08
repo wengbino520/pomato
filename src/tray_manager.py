@@ -203,27 +203,29 @@ class TrayManager(QObject):
             self._play_sound()
 
         today = date.today().isoformat()
+        # 使用 DB 统一分配的序号，而非 TimerEngine 内部计数
+        db_session_no = self.db.get_next_session_no(today)
         previous_content = self.db.get_latest_valid_entry_content(today)
-        popup = PopupWindow(session_no, self.config, previous_content=previous_content)
+        popup = PopupWindow(db_session_no, self.config, previous_content=previous_content)
         self._active_popup = popup
 
         def on_submitted(content: str, tags: list[str]):
             day = date.today().isoformat()
-            self.db.add_entry(day, session_no, start_time, end_time, content, tags)
+            self.db.add_entry(day, db_session_no, start_time, end_time, content, tags)
             if self.main_window:
                 self.main_window.refresh()
             self._active_popup = None
 
         def on_skipped():
             day = date.today().isoformat()
-            self.db.add_entry(day, session_no, start_time, end_time, "", [], skipped=True)
+            self.db.add_entry(day, db_session_no, start_time, end_time, "", [], skipped=True)
             if self.main_window:
                 self.main_window.refresh()
             self._active_popup = None
 
         def on_timeout():
             day = date.today().isoformat()
-            self.db.add_entry(day, session_no, start_time, end_time, "未记录", ["未记录"], skipped=False)
+            self.db.add_entry(day, db_session_no, start_time, end_time, "未记录", ["未记录"], skipped=False)
             if self.main_window:
                 self.main_window.refresh()
             self.tray.showMessage(

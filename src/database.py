@@ -62,7 +62,7 @@ class Database:
     def get_entries_by_date(self, date_str):
         with self._get_conn() as conn:
             rows = conn.execute(
-                "SELECT * FROM pomodoro_entries WHERE date=? ORDER BY session_no",
+                "SELECT * FROM pomodoro_entries WHERE date=? ORDER BY start_time, end_time",
                 (date_str,),
             ).fetchall()
         result = []
@@ -144,7 +144,7 @@ class Database:
             row = conn.execute(
                 """SELECT content FROM pomodoro_entries
                    WHERE date=? AND skipped=0 AND content IS NOT NULL AND TRIM(content) != ''
-                   ORDER BY session_no DESC LIMIT 1""",
+                   ORDER BY start_time DESC, end_time DESC LIMIT 1""",
                 (date_str,),
             ).fetchone()
         return row["content"] if row else ""
