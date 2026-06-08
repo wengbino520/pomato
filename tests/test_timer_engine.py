@@ -7,7 +7,7 @@ import pytest
 from datetime import datetime as _real_dt, date as _real_date
 from unittest.mock import MagicMock, patch
 
-from src.timer_engine import TimerState
+from src.services.timer_engine import TimerState
 
 
 # ── 辅助：构造 datetime/date mock ─────────────────────────────────────────────
@@ -115,8 +115,8 @@ class TestBreakLogic:
         engine._session_no = session_no
         engine._session_start = "09:00:00"
         mock_dt, mock_d = self._work_time_mocks()
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._handle_session_end()
 
     def test_4th_session_triggers_long_break(self, engine, tmp_config):
@@ -155,8 +155,8 @@ class TestBreakLogic:
         engine._session_no = 1
         before = engine.session_no
         mock_dt, mock_d = self._work_time_mocks()
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._handle_session_end()
         assert engine.state == TimerState.WORK
         assert engine.session_no == before + 1
@@ -166,8 +166,8 @@ class TestBreakLogic:
         engine._session_no = 4
         before = engine.session_no
         mock_dt, mock_d = self._work_time_mocks()
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._handle_session_end()
         assert engine.state == TimerState.WORK
         assert engine.session_no == before + 1
@@ -287,8 +287,8 @@ class TestAutoStart:
         # 2026-06-01 是周一 09:00
         fixed = _real_dt(2026, 6, 1, 9, 0, 0)
         mock_dt, mock_d = _dt_mocks(fixed)
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
         assert engine.state == TimerState.WORK
 
@@ -298,8 +298,8 @@ class TestAutoStart:
         # 周一 08:00（在开始时间之前）
         fixed = _real_dt(2026, 6, 1, 8, 0, 0)
         mock_dt, mock_d = _dt_mocks(fixed)
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
         assert engine.state == TimerState.IDLE
 
@@ -309,8 +309,8 @@ class TestAutoStart:
         # 2026-06-06 是周六 09:00
         fixed = _real_dt(2026, 6, 6, 9, 0, 0)
         mock_dt, mock_d = _dt_mocks(fixed)
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
         assert engine.state == TimerState.IDLE
 
@@ -320,8 +320,8 @@ class TestAutoStart:
         # 2026-06-07 是周日 09:00
         fixed = _real_dt(2026, 6, 7, 9, 0, 0)
         mock_dt, mock_d = _dt_mocks(fixed)
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
         assert engine.state == TimerState.IDLE
 
@@ -331,8 +331,8 @@ class TestAutoStart:
         tmp_config.set("holiday_check_enabled", False)
         fixed = _real_dt(2026, 6, 1, 8, 30, 0)   # 周一 08:30:00
         mock_dt, mock_d = _dt_mocks(fixed)
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
         assert engine.state == TimerState.WORK
 
@@ -347,8 +347,8 @@ class TestAutoStart:
         # 新的一天，但还在开始时间之前（确保不自动启动）
         fixed = _real_dt(2026, 6, 2, 7, 0, 0)
         mock_dt, mock_d = _dt_mocks(fixed)
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
 
         assert engine._today == "2026-06-02"
@@ -368,8 +368,8 @@ class TestAutoStartWithHoliday:
 
         with patch.object(engine._holiday_manager, "is_workday", return_value=True), \
              patch.object(engine._holiday_manager, "get_holiday_name", return_value=None), \
-             patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+             patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
 
         assert engine.state == TimerState.WORK
@@ -382,8 +382,8 @@ class TestAutoStartWithHoliday:
 
         with patch.object(engine._holiday_manager, "is_workday", return_value=False), \
              patch.object(engine._holiday_manager, "get_holiday_name", return_value="元旦"), \
-             patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+             patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
 
         assert engine.state == TimerState.IDLE
@@ -396,8 +396,8 @@ class TestAutoStartWithHoliday:
 
         with patch.object(engine._holiday_manager, "is_workday", return_value=True), \
              patch.object(engine._holiday_manager, "get_holiday_name", return_value=None), \
-             patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+             patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
 
         assert engine.state == TimerState.WORK
@@ -409,8 +409,8 @@ class TestAutoStartWithHoliday:
         fixed = _real_dt(2026, 6, 6, 9, 0, 0)  # Saturday
         mock_dt, mock_d = _dt_mocks(fixed)
 
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
 
         assert engine.state == TimerState.IDLE
@@ -422,8 +422,8 @@ class TestAutoStartWithHoliday:
         fixed = _real_dt(2026, 6, 1, 9, 0, 0)  # Monday
         mock_dt, mock_d = _dt_mocks(fixed)
 
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
 
         assert engine.state == TimerState.WORK
@@ -439,8 +439,8 @@ class TestAutoStartWithHoliday:
 
         with patch.object(engine._holiday_manager, "is_workday", return_value=False), \
              patch.object(engine._holiday_manager, "get_holiday_name", return_value="元旦"), \
-             patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+             patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
 
         assert any("元旦" in lbl for lbl in labels)
@@ -456,8 +456,8 @@ class TestAutoStartWithHoliday:
 
         with patch.object(engine._holiday_manager, "is_workday", return_value=False), \
              patch.object(engine._holiday_manager, "get_holiday_name", return_value=None), \
-             patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+             patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
 
         assert any("周末" in lbl for lbl in labels)
@@ -475,8 +475,8 @@ class TestWorkEndTimeIdle:
         tmp_config.set("holiday_check_enabled", False)
         fixed = _real_dt(2026, 6, 1, 22, 31, 0)  # Monday 22:31
         mock_dt, mock_d = _dt_mocks(fixed)
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
         assert engine.state == TimerState.IDLE
 
@@ -487,8 +487,8 @@ class TestWorkEndTimeIdle:
         tmp_config.set("holiday_check_enabled", False)
         fixed = _real_dt(2026, 6, 1, 22, 30, 0)  # Monday 22:30
         mock_dt, mock_d = _dt_mocks(fixed)
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
         assert engine.state == TimerState.IDLE
 
@@ -499,8 +499,8 @@ class TestWorkEndTimeIdle:
         tmp_config.set("holiday_check_enabled", False)
         fixed = _real_dt(2026, 6, 1, 22, 29, 0)  # Monday 22:29
         mock_dt, mock_d = _dt_mocks(fixed)
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
         assert engine.state == TimerState.WORK
 
@@ -513,8 +513,8 @@ class TestWorkEndTimeIdle:
 
         labels = []
         engine.tick.connect(lambda rem, lbl: labels.append(lbl))
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
         assert any("22:30" in lbl for lbl in labels)
 
@@ -528,8 +528,8 @@ class TestWorkEndTimeIdle:
 
         with patch.object(engine._holiday_manager, "is_workday", return_value=False), \
              patch.object(engine._holiday_manager, "get_holiday_name", return_value="元旦"), \
-             patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+             patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
 
         assert not any("元旦" in lbl for lbl in labels)
@@ -557,8 +557,8 @@ class TestGracefulEndTime:
         mock_dt, mock_d = self._set_end_time_and_clock(
             tmp_config, engine, 22, 35
         )
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._handle_session_end()
         assert engine.state == TimerState.IDLE
 
@@ -567,8 +567,8 @@ class TestGracefulEndTime:
         mock_dt, mock_d = self._set_end_time_and_clock(
             tmp_config, engine, 22, 10
         )
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._handle_session_end()
         assert engine.state in (TimerState.SHORT_BREAK, TimerState.LONG_BREAK)
 
@@ -580,8 +580,8 @@ class TestGracefulEndTime:
 
         fixed = _real_dt(2026, 6, 1, 22, 35, 0)
         mock_dt, mock_d = _dt_mocks(fixed)
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._handle_session_end()
         assert engine.state == TimerState.IDLE
 
@@ -593,8 +593,8 @@ class TestGracefulEndTime:
 
         fixed = _real_dt(2026, 6, 1, 22, 10, 0)
         mock_dt, mock_d = _dt_mocks(fixed)
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._handle_session_end()
         assert engine.state == TimerState.WORK
 
@@ -608,8 +608,8 @@ class TestGracefulEndTime:
         mock_dt, mock_d = self._set_end_time_and_clock(
             tmp_config, engine, 22, 35
         )
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._handle_session_end()
 
         assert "idle" in state_changes
@@ -630,8 +630,8 @@ class TestCrossDayReset:
 
         fixed = _real_dt(2026, 6, 2, 7, 0, 0)
         mock_dt, mock_d = _dt_mocks(fixed)
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
 
         assert engine._session_no == 0
@@ -646,8 +646,8 @@ class TestCrossDayReset:
 
         fixed = _real_dt(2026, 6, 2, 0, 5, 0)
         mock_dt, mock_d = _dt_mocks(fixed)
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
 
         assert engine._session_no == 3
@@ -678,8 +678,8 @@ class TestCrossDayReset:
 
         fixed = _real_dt(2026, 6, 2, 0, 10, 0)
         mock_dt, mock_d = _dt_mocks(fixed)
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
 
         assert engine._session_no == 5
@@ -699,8 +699,8 @@ class TestCrossDayReset:
         # 步骤1：跨天 tick（00:05 已过午夜），session 不受影响
         fixed = _real_dt(2026, 6, 2, 0, 5, 0)
         mock_dt, mock_d = _dt_mocks(fixed)
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.timer_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.timer_engine.date", mock_d):
             engine._on_tick()
         assert engine._session_no == 3
         assert engine._day_reset_pending is True
@@ -710,8 +710,8 @@ class TestCrossDayReset:
         # session_no 仍然 = 3，pending = True
         fixed2 = _real_dt(2026, 6, 2, 8, 30, 0)
         mock_dt2, mock_d2 = _dt_mocks(fixed2)
-        with patch("src.timer_engine.datetime", mock_dt2), \
-             patch("src.timer_engine.date", mock_d2):
+        with patch("src.services.timer_engine.datetime", mock_dt2), \
+             patch("src.services.timer_engine.date", mock_d2):
             engine._on_tick()
         # _start_work_session 应检测到 pending 并归零再 +1
         assert engine.state == TimerState.WORK

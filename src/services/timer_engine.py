@@ -3,7 +3,7 @@ from enum import Enum
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
-from src.holiday_manager import HolidayManager
+from src.services.holiday_manager import HolidayManager
 
 
 class TimerState(Enum):

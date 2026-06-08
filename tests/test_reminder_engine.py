@@ -121,8 +121,8 @@ class TestCarryOverTodos:
         reminder_engine.config.set("todo_auto_carry_over", False)
         reminder_engine.add_todo("Old", todo_date="2026-06-01")
         mock_dt, mock_d = _mock_now(2026, 6, 2, 9, 0)
-        with patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             reminder_engine._last_date = "2026-06-01"
             reminder_engine.carry_over_pending_todos()
         todos_today = reminder_engine.db.get_todos(date_str="2026-06-02")
@@ -142,8 +142,8 @@ class TestDateChangeDetection:
         reminder_engine.config.set("todo_auto_carry_over", True)
         reminder_engine.add_todo("昨天任务", todo_date="2026-06-01")
         mock_dt, mock_d = _mock_now(2026, 6, 2, 9, 0)
-        with patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             reminder_engine._last_date = "2026-06-01"
             reminder_engine.on_tick()
         todos_today = reminder_engine.db.get_todos(date_str="2026-06-02")
@@ -161,8 +161,8 @@ class TestReminderSchedulingNoMatch:
     def test_no_reminder_no_trigger(self, reminder_engine):
         mock_dt, mock_d = _mock_now(2026, 6, 9, 10, 0)
         spy = spy_signal(reminder_engine.reminder_triggered)
-        with patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             reminder_engine.on_tick()
         assert len(spy) == 0
 
@@ -170,8 +170,8 @@ class TestReminderSchedulingNoMatch:
         reminder_engine.add_reminder("X", "15:00")
         mock_dt, mock_d = _mock_now(2026, 6, 9, 10, 0)
         spy = spy_signal(reminder_engine.reminder_triggered)
-        with patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             reminder_engine.on_tick()
         assert len(spy) == 0
 
@@ -183,8 +183,8 @@ class TestReminderSchedulingExact:
         reminder_engine.add_reminder("喝咖啡", "10:00")
         mock_dt, mock_d = _mock_now(2026, 6, 9, 10, 0)
         spy = spy_signal(reminder_engine.reminder_triggered)
-        with patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             reminder_engine.on_tick()
         assert len(spy) == 1
         args = spy[0]
@@ -195,13 +195,13 @@ class TestReminderSchedulingExact:
         reminder_engine.add_reminder("X", "10:00")
         mock_dt, mock_d = _mock_now(2026, 6, 9, 10, 0)
         spy = spy_signal(reminder_engine.reminder_triggered)
-        with patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             reminder_engine.on_tick()
         assert len(spy) == 1
         # second tick at same minute shouldn't duplicate
-        with patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             reminder_engine.on_tick()
         assert len(spy) == 1
 
@@ -213,14 +213,14 @@ class TestReminderRepeatDaily:
         reminder_engine.add_reminder("日提醒", "09:00", repeat_type="daily")
         mock_dt1, mock_d1 = _mock_now(2026, 6, 9, 9, 0)
         spy = spy_signal(reminder_engine.reminder_triggered)
-        with patch("src.reminder_engine.datetime", mock_dt1), \
-             patch("src.reminder_engine.date", mock_d1):
+        with patch("src.services.reminder_engine.datetime", mock_dt1), \
+             patch("src.services.reminder_engine.date", mock_d1):
             reminder_engine.on_tick()
         assert len(spy) == 1
         # Day 2
         mock_dt2, mock_d2 = _mock_now(2026, 6, 10, 9, 0)
-        with patch("src.reminder_engine.datetime", mock_dt2), \
-             patch("src.reminder_engine.date", mock_d2):
+        with patch("src.services.reminder_engine.datetime", mock_dt2), \
+             patch("src.services.reminder_engine.date", mock_d2):
             reminder_engine._triggered_today.clear()
             reminder_engine.on_tick()
         assert len(spy) == 2
@@ -233,8 +233,8 @@ class TestReminderRepeatWeekday:
         reminder_engine.add_reminder("工作日", "09:00", repeat_type="weekday")
         mock_dt, mock_d = _mock_now(2026, 6, 1, 9, 0)  # Monday
         spy = spy_signal(reminder_engine.reminder_triggered)
-        with patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             reminder_engine.on_tick()
         assert len(spy) == 1
 
@@ -242,8 +242,8 @@ class TestReminderRepeatWeekday:
         reminder_engine.add_reminder("工作日", "09:00", repeat_type="weekday")
         mock_dt, mock_d = _mock_now(2026, 6, 6, 9, 0)  # Saturday
         spy = spy_signal(reminder_engine.reminder_triggered)
-        with patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             reminder_engine.on_tick()
         assert len(spy) == 0
 
@@ -251,8 +251,8 @@ class TestReminderRepeatWeekday:
         reminder_engine.add_reminder("工作日", "09:00", repeat_type="weekday")
         mock_dt, mock_d = _mock_now(2026, 6, 7, 9, 0)  # Sunday
         spy = spy_signal(reminder_engine.reminder_triggered)
-        with patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             reminder_engine.on_tick()
         assert len(spy) == 0
 
@@ -266,8 +266,8 @@ class TestReminderRepeatWeekly:
                                      repeat_days="0")  # 0=Monday
         mock_dt, mock_d = _mock_now(2026, 6, 1, 10, 0)  # Monday
         spy = spy_signal(reminder_engine.reminder_triggered)
-        with patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             reminder_engine.on_tick()
         assert len(spy) == 1
 
@@ -277,8 +277,8 @@ class TestReminderRepeatWeekly:
                                      repeat_days="0")
         mock_dt, mock_d = _mock_now(2026, 6, 2, 10, 0)  # Tuesday
         spy = spy_signal(reminder_engine.reminder_triggered)
-        with patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             reminder_engine.on_tick()
         assert len(spy) == 0
 
@@ -288,8 +288,8 @@ class TestReminderRepeatWeekly:
                                      repeat_days="0,2,4")  # Mon,Wed,Fri
         mock_dt, mock_d = _mock_now(2026, 6, 3, 9, 0)  # Wednesday
         spy = spy_signal(reminder_engine.reminder_triggered)
-        with patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             reminder_engine.on_tick()
         assert len(spy) == 1
 
@@ -308,8 +308,8 @@ class TestReminderSnooze:
 
     def test_snooze_changes_time(self, reminder_engine):
         mock_dt, mock_d = _mock_now(2026, 6, 9, 10, 0)
-        with patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             rid = reminder_engine.add_reminder("延后测试", "10:00")
             reminder_engine.snooze_reminder(rid)
         r = reminder_engine.db.get_reminder(rid)
@@ -319,8 +319,8 @@ class TestReminderSnooze:
         rid = reminder_engine.add_reminder("X", "10:00")
         reminder_engine.db.mark_reminder_triggered(rid, "2026-06-09")
         mock_dt, mock_d = _mock_now(2026, 6, 9, 10, 1)
-        with patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             reminder_engine.snooze_reminder(rid)
         r = reminder_engine.db.get_reminder(rid)
         assert r["last_triggered"] is None
@@ -336,8 +336,8 @@ class TestSilentOutsideWork:
         reminder_engine.add_reminder("静默测试", "07:00")
         mock_dt, mock_d = _mock_now(2026, 6, 9, 7, 0)
         spy = spy_signal(reminder_engine.reminder_triggered)
-        with patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             reminder_engine.on_tick()
         assert len(spy) == 0
 
@@ -348,8 +348,8 @@ class TestSilentOutsideWork:
         reminder_engine.add_reminder("上班提醒", "10:00")
         mock_dt, mock_d = _mock_now(2026, 6, 9, 10, 0)
         spy = spy_signal(reminder_engine.reminder_triggered)
-        with patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             reminder_engine.on_tick()
         assert len(spy) == 1
 
@@ -362,8 +362,8 @@ class TestMultipleReminders:
         reminder_engine.add_reminder("B", "10:00")
         mock_dt, mock_d = _mock_now(2026, 6, 9, 10, 0)
         spy = spy_signal(reminder_engine.reminder_triggered)
-        with patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             reminder_engine.on_tick()
         assert len(spy) == 2
 
@@ -381,13 +381,13 @@ class TestTimerEngineIntegration:
         mock_dt, mock_d = _mock_now(2026, 6, 9, 14, 0)
         engine._state = "work"
         engine._remaining = 1500
-        with patch("src.timer_engine.datetime", mock_dt):
+        with patch("src.services.timer_engine.datetime", mock_dt):
             engine._on_tick()
 
     def test_timer_with_reminder_engine_calls_on_tick(self, qapp, tmp_config, tmp_db):
         """传入 reminder_engine 时 _on_tick 触发引擎 tick。"""
-        from src.reminder_engine import ReminderEngine
-        from src.timer_engine import TimerEngine
+        from src.services.reminder_engine import ReminderEngine
+        from src.services.timer_engine import TimerEngine
         rengine = ReminderEngine(tmp_config, tmp_db)
         rengine.add_reminder("定时", "14:00")
         timer = TimerEngine(tmp_config, reminder_engine=rengine)
@@ -395,8 +395,8 @@ class TestTimerEngineIntegration:
         timer._state = "work"
         timer._remaining = 1500
         spy = spy_signal(rengine.reminder_triggered)
-        with patch("src.timer_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.datetime", mock_dt), \
-             patch("src.reminder_engine.date", mock_d):
+        with patch("src.services.timer_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
             timer._on_tick()
         assert len(spy) == 1

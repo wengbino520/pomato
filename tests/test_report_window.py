@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch, mock_open
 
 from PyQt6.QtWidgets import QDialog
 
-from src.report_window import ReportWindow
+from src.ui.report_window import ReportWindow
 
 
 # ── 辅助 ──────────────────────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ class TestExportDocx:
         with patch("PyQt6.QtWidgets.QFileDialog.getSaveFileName",
                    return_value=(output_path, "Word 文档 (*.docx)")), \
              patch.object(QDialog, "__init__", return_value=None), \
-             patch("src.report_window.QMessageBox.information"):
+             patch("src.ui.report_window.QMessageBox.information"):
             win = ReportWindow.__new__(ReportWindow)
             win.config = _DummyConfig()
             win.db = _DummyDB()
@@ -177,7 +177,7 @@ class TestExportDocx:
         win.entries = []
 
         with patch.object(QDialog, "__init__", return_value=None), \
-             patch("src.report_window.QMessageBox.warning") as mock_warn, \
+             patch("src.ui.report_window.QMessageBox.warning") as mock_warn, \
              patch("builtins.__import__", side_effect=ImportError("No module named 'docx'")):
             win._export_docx()
 
@@ -192,7 +192,7 @@ class TestExportDocx:
         with patch("PyQt6.QtWidgets.QFileDialog.getSaveFileName",
                    return_value=(output_path, "Word 文档 (*.docx)")), \
              patch.object(QDialog, "__init__", return_value=None), \
-             patch("src.report_window.QMessageBox.information"):
+             patch("src.ui.report_window.QMessageBox.information"):
             win = ReportWindow.__new__(ReportWindow)
             win.config = _DummyConfig()
             win.db = _DummyDB()

@@ -8,7 +8,7 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from src.holiday_manager import HolidayManager
+from src.services.holiday_manager import HolidayManager
 
 
 # ── 辅助：中国节假日 API 响应格式 ────────────────────────────────────────────────

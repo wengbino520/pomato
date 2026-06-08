@@ -8,7 +8,7 @@ import pytest
 from collections import deque
 from unittest.mock import MagicMock, patch
 
-from src.tray_manager import TrayManager
+from src.app import TrayManager
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -39,7 +39,7 @@ class TestPopupQueueIdle:
     def test_idle_creates_popup(self, tray_mgr):
         """无活跃弹窗时 _on_reminder_triggered 创建 ReminderPopup。"""
         # 确保弹窗不实际显示
-        with patch("src.tray_manager.ReminderPopup") as MockPopup:
+        with patch("src.app.ReminderPopup") as MockPopup:
             mock_popup = MagicMock()
             MockPopup.return_value = mock_popup
             tray_mgr._on_reminder_triggered(1, "测试", "10:00")
@@ -51,7 +51,7 @@ class TestPopupQueueIdle:
     def test_idle_sets_active_popup(self, tray_mgr):
         """空闲时 _active_popup 被设置。"""
         assert tray_mgr._active_popup is None
-        with patch("src.tray_manager.ReminderPopup") as MockPopup:
+        with patch("src.app.ReminderPopup") as MockPopup:
             mock_popup = MagicMock()
             MockPopup.return_value = mock_popup
             tray_mgr._on_reminder_triggered(1, "测试", "10:00")
@@ -59,7 +59,7 @@ class TestPopupQueueIdle:
 
     def test_idle_queue_empty(self, tray_mgr):
         """空闲时不使用队列。"""
-        with patch("src.tray_manager.ReminderPopup") as MockPopup:
+        with patch("src.app.ReminderPopup") as MockPopup:
             MockPopup.return_value = MagicMock()
             tray_mgr._on_reminder_triggered(1, "测试", "10:00")
             assert len(tray_mgr._popup_queue) == 0
@@ -70,7 +70,7 @@ class TestPopupQueueBusy:
 
     def test_busy_enqueues(self, tray_mgr):
         """已有活跃弹窗时新提醒入队。"""
-        with patch("src.tray_manager.ReminderPopup") as MockPopup:
+        with patch("src.app.ReminderPopup") as MockPopup:
             popup1 = MagicMock()
             popup2 = MagicMock()
             MockPopup.side_effect = [popup1, popup2]
@@ -87,7 +87,7 @@ class TestPopupQueueBusy:
 
     def test_busy_does_not_show_second(self, tray_mgr):
         """入队弹窗不立即显示。"""
-        with patch("src.tray_manager.ReminderPopup") as MockPopup:
+        with patch("src.app.ReminderPopup") as MockPopup:
             popup1 = MagicMock()
             popup2 = MagicMock()
             MockPopup.side_effect = [popup1, popup2]
@@ -104,7 +104,7 @@ class TestPopupQueueOverflow:
 
     def test_queue_maxlen_enforces_limit(self, tray_mgr):
         """deque(maxlen=2) 自动丢弃最旧元素。"""
-        with patch("src.tray_manager.ReminderPopup") as MockPopup:
+        with patch("src.app.ReminderPopup") as MockPopup:
             popups = [MagicMock() for _ in range(5)]
             for p in popups:
                 p.isVisible.return_value = False
@@ -122,7 +122,7 @@ class TestPopupQueueOverflow:
 
     def test_queue_overflow_does_not_affect_active(self, tray_mgr):
         """溢出不影响活跃弹窗。"""
-        with patch("src.tray_manager.ReminderPopup") as MagicMockPopup:
+        with patch("src.app.ReminderPopup") as MagicMockPopup:
             popups = [MagicMock() for _ in range(5)]
             for p in popups:
                 p.isVisible.return_value = False
@@ -141,7 +141,7 @@ class TestPopupQueueDrain:
 
     def test_on_popup_closed_shows_next(self, tray_mgr):
         """关闭活跃弹窗后自动显示队列中的下一个。"""
-        with patch("src.tray_manager.ReminderPopup") as MockPopup:
+        with patch("src.app.ReminderPopup") as MockPopup:
             p1 = MagicMock()
             p1.isVisible.return_value = False
             p2 = MagicMock()
@@ -159,7 +159,7 @@ class TestPopupQueueDrain:
 
     def test_drain_empties_queue(self, tray_mgr):
         """队列全部弹出后为空。"""
-        with patch("src.tray_manager.ReminderPopup") as MockPopup:
+        with patch("src.app.ReminderPopup") as MockPopup:
             popups = [MagicMock() for _ in range(3)]
             for p in popups:
                 p.isVisible.return_value = False
@@ -179,7 +179,7 @@ class TestPopupQueueDrain:
 
     def test_drain_skips_already_visible(self, tray_mgr):
         """跳过已在显示的队内弹窗。"""
-        with patch("src.tray_manager.ReminderPopup") as MockPopup:
+        with patch("src.app.ReminderPopup") as MockPopup:
             p1 = MagicMock()
             p1.isVisible.return_value = False
             p2 = MagicMock()

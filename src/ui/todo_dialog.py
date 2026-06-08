@@ -4,7 +4,7 @@ TodoDialog — 待办弹窗薄壳 (TASK-12)
 内嵌 TodoListWidget 作为唯一子控件。
 """
 from PyQt6.QtWidgets import QDialog, QVBoxLayout
-from src.todo_list_widget import TodoListWidget
+from src.ui.todo_list_widget import TodoListWidget
 
 
 class TodoDialog(QDialog):

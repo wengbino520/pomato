@@ -6,7 +6,7 @@ import pytest
 from datetime import date
 from unittest.mock import MagicMock, patch
 
-from src.ai_client import build_prompt, AIClient
+from src.services.ai_client import build_prompt, AIClient
 
 
 # ── 辅助：构造测试用 entry ────────────────────────────────────────────────────
@@ -155,7 +155,7 @@ class TestGenerateReport:
         mock_client = MagicMock()
         mock_client.chat.completions.create.return_value = mock_resp
 
-        with patch("src.ai_client.OpenAI", return_value=mock_client):
+        with patch("src.services.ai_client.OpenAI", return_value=mock_client):
             result = AIClient(tmp_config).generate_report([make_entry(content="任务")])
 
         assert result == "ok"
@@ -172,7 +172,7 @@ class TestGenerateReport:
         mock_client = MagicMock()
         mock_client.chat.completions.create.return_value = mock_resp
 
-        with patch("src.ai_client.OpenAI", return_value=mock_client):
+        with patch("src.services.ai_client.OpenAI", return_value=mock_client):
             result = AIClient(tmp_config).generate_report(
                 [make_entry(content="任务")]
             )
@@ -191,7 +191,7 @@ class TestGenerateReport:
         mock_client = MagicMock()
         mock_client.chat.completions.create.return_value = mock_resp
 
-        with patch("src.ai_client.OpenAI", return_value=mock_client):
+        with patch("src.services.ai_client.OpenAI", return_value=mock_client):
             AIClient(tmp_config).generate_report([make_entry(content="任务")])
 
         messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
@@ -215,7 +215,7 @@ class TestGenerateReport:
         mock_client.chat.completions.create.return_value = iter([chunk1, chunk2])
 
         received_chunks = []
-        with patch("src.ai_client.OpenAI", return_value=mock_client):
+        with patch("src.services.ai_client.OpenAI", return_value=mock_client):
             result = AIClient(tmp_config).generate_report(
                 [make_entry(content="任务")],
                 on_chunk=lambda c: received_chunks.append(c),
@@ -240,7 +240,7 @@ class TestGenerateReport:
         mock_client.chat.completions.create.return_value = iter([chunk_empty, chunk_valid])
 
         received_chunks = []
-        with patch("src.ai_client.OpenAI", return_value=mock_client):
+        with patch("src.services.ai_client.OpenAI", return_value=mock_client):
             AIClient(tmp_config).generate_report(
                 [make_entry(content="任务")],
                 on_chunk=lambda c: received_chunks.append(c),
@@ -255,7 +255,7 @@ class TestGenerateReport:
         mock_client = MagicMock()
         mock_client.chat.completions.create.return_value = iter([])
 
-        with patch("src.ai_client.OpenAI", return_value=mock_client):
+        with patch("src.services.ai_client.OpenAI", return_value=mock_client):
             AIClient(tmp_config).generate_report(
                 [make_entry(content="任务")],
                 on_chunk=lambda c: None,

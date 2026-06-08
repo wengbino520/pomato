@@ -6,7 +6,7 @@ from datetime import date, timedelta
 
 from PyQt6.QtCore import QObject, QDate, pyqtSignal
 
-from src.main_window import EntryItem, MainWindow
+from src.ui.main_window import EntryItem, MainWindow
 
 
 class _DummyTimer(QObject):

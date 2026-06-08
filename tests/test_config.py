@@ -7,7 +7,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.config import Config, DEFAULT_CONFIG
+from src.core.config import Config, DEFAULT_CONFIG
 
 
 # ── 正确性测试 ─────────────────────────────────────────────────────────────────

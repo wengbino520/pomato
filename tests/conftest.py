@@ -35,7 +35,7 @@ def tmp_config(tmp_path):
     指向临时目录的 Config 实例，与真实 ~/.pomato 完全隔离。
     """
     with patch("pathlib.Path.home", return_value=tmp_path):
-        from src.config import Config
+        from src.core.config import Config
         return Config()
 
 
@@ -47,7 +47,7 @@ def tmp_db(tmp_path):
     指向临时目录的 Database 实例，使用独立 SQLite 文件。
     """
     with patch("pathlib.Path.home", return_value=tmp_path):
-        from src.database import Database
+        from src.core.database import Database
         return Database()
 
 
@@ -58,7 +58,7 @@ def engine(qapp, tmp_config):
     """
     TimerEngine 实例，使用隔离配置，QTimer 未启动。
     """
-    from src.timer_engine import TimerEngine
+    from src.services.timer_engine import TimerEngine
     return TimerEngine(tmp_config)
 
 
@@ -69,5 +69,5 @@ def reminder_engine(qapp, tmp_config, tmp_db):
     """
     ReminderEngine 实例，使用隔离 Config + Database。
     """
-    from src.reminder_engine import ReminderEngine
+    from src.services.reminder_engine import ReminderEngine
     return ReminderEngine(tmp_config, tmp_db)

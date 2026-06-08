@@ -34,11 +34,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from PyQt6.QtWidgets import QApplication
 
-from src.config import Config
-from src.database import Database
-from src.reminder_engine import ReminderEngine
-from src.timer_engine import TimerEngine
-from src.tray_manager import TrayManager
+from src.core.config import Config
+from src.core.database import Database
+from src.services.reminder_engine import ReminderEngine
+from src.services.timer_engine import TimerEngine
+from src.app import TrayManager
 
 
 def main():

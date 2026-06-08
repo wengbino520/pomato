@@ -4,7 +4,7 @@ ReminderDialog — 提醒管理弹窗薄壳 (TASK-13)
 内嵌 ReminderListWidget 作为唯一子控件。
 """
 from PyQt6.QtWidgets import QDialog, QVBoxLayout
-from src.reminder_list_widget import ReminderListWidget
+from src.ui.reminder_list_widget import ReminderListWidget
 
 
 class ReminderDialog(QDialog):

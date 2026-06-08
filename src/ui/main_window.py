@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from src.history_window import HistoryWindow
+from src.ui.history_window import HistoryWindow
 
 
 class EditEntryDialog(QDialog):

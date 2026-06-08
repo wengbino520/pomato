@@ -252,7 +252,7 @@ class TestDatabaseExceptionScenarios:
         from unittest.mock import patch
 
         with patch("pathlib.Path.home", return_value=tmp_path):
-            from src.database import Database
+            from src.core.database import Database
             db = Database()
             eid = db.add_entry("2026-06-02", 1, "09:00:00", "09:25:00", "数据")
             # 再次实例化（等同调用 _init_db 两次）

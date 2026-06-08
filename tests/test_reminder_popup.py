@@ -8,7 +8,7 @@ import pytest
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QKeySequence, QShortcut
 
-from src.reminder_popup import ReminderPopup
+from src.ui.reminder_popup import ReminderPopup
 
 
 # ═══════════════════════════════════════════════════════════════════

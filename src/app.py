@@ -5,13 +5,13 @@ from PyQt6.QtCore import QObject, Qt, pyqtSlot
 from PyQt6.QtGui import QBrush, QColor, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QMenu, QMessageBox, QSystemTrayIcon
 
-from src.ai_client import AIClient
-from src.history_window import HistoryWindow
-from src.main_window import MainWindow
-from src.popup_window import PopupWindow
-from src.reminder_popup import ReminderPopup
-from src.report_window import ReportWindow
-from src.settings_window import SettingsWindow
+from src.services.ai_client import AIClient
+from src.ui.history_window import HistoryWindow
+from src.ui.main_window import MainWindow
+from src.ui.popup_window import PopupWindow
+from src.ui.reminder_popup import ReminderPopup
+from src.ui.report_window import ReportWindow
+from src.ui.settings_window import SettingsWindow
 
 
 class TrayManager(QObject):
@@ -346,11 +346,11 @@ class TrayManager(QObject):
         pass  # Already marked triggered in engine
 
     def _show_todo_dialog(self):
-        from src.todo_dialog import TodoDialog
+        from src.ui.todo_dialog import TodoDialog
         if self._reminder_engine:
             TodoDialog(self._reminder_engine).exec()
 
     def _show_reminder_dialog(self):
-        from src.reminder_dialog import ReminderDialog
+        from src.ui.reminder_dialog import ReminderDialog
         if self._reminder_engine:
             ReminderDialog(self._reminder_engine).exec()
