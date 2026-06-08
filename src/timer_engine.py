@@ -31,6 +31,7 @@ class TimerEngine(QObject):
         self._session_start = None
         self._today = None
         self._paused = False
+        self._day_reset_pending = False
         self._holiday_manager = HolidayManager(self.config.get_data_dir())
 
         self._timer = QTimer(self)
@@ -95,14 +96,20 @@ class TimerEngine(QObject):
         now = datetime.now()
         today = date.today().isoformat()
 
-        # Reset session count on a new calendar day
+        # Reset session count on a new calendar day (defer if a session is running)
         if self._today != today:
+            if self._state == TimerState.IDLE:
+                self._session_no = 0
+                self._day_reset_pending = False
+            else:
+                self._day_reset_pending = True
             self._today = today
-            self._session_no = 0
 
         if self._state == TimerState.IDLE:
             start_str = self.config.get("work_start_time", "08:30")
-            h, m = map(int, start_str.split(":"))
+            end_str = self.config.get("work_end_time", "22:30")
+            start_h, start_m = map(int, start_str.split(":"))
+            end_h, end_m = map(int, end_str.split(":"))
 
             # 判断今天是否为工作日
             holiday_enabled = self.config.get("holiday_check_enabled", True)
@@ -113,13 +120,17 @@ class TimerEngine(QObject):
                 is_workday = now.weekday() < 5
                 holiday_name = None
 
-            if now.time() >= time(h, m) and is_workday:
+            current_t = now.time()
+            # 检查是否在允许的计时时间段内
+            if current_t < time(start_h, start_m):
+                self.tick.emit(-1, f"等待开始 ({start_str})")
+            elif current_t >= time(end_h, end_m):
+                self.tick.emit(-1, f"已过计时时间 (至 {end_str})")
+            elif is_workday:
                 self._start_work_session()
-            elif not is_workday and now.time() >= time(h, m):
+            else:
                 label = f"非工作日 ({holiday_name or '周末'})"
                 self.tick.emit(-1, label)
-            else:
-                self.tick.emit(-1, f"等待开始 ({start_str})")
             return
 
         self._remaining -= 1
@@ -134,6 +145,9 @@ class TimerEngine(QObject):
             self.tick.emit(self._remaining, labels.get(self._state, ""))
 
     def _start_work_session(self):
+        if self._day_reset_pending:
+            self._session_no = 0
+            self._day_reset_pending = False
         self._session_no += 1
         self._session_start = datetime.now().strftime("%H:%M:%S")
         self._remaining = self.config.get("pomodoro_duration", 25) * 60
@@ -144,6 +158,15 @@ class TimerEngine(QObject):
         if self._state == TimerState.WORK:
             end_time = datetime.now().strftime("%H:%M:%S")
             self.work_session_ended.emit(self._session_no, self._session_start, end_time)
+
+            # 若当前已过每日截止时间，不再进入休息，直接回到空闲
+            end_str = self.config.get("work_end_time", "22:30")
+            eh, em = map(int, end_str.split(":"))
+            if datetime.now().time() >= time(eh, em):
+                self._state = TimerState.IDLE
+                self.state_changed.emit("idle")
+                self.tick.emit(-1, f"已完成最后一个番茄 (已过 {end_str})")
+                return
 
             interval = self.config.get("long_break_interval", 4)
             if self._session_no % interval == 0:
@@ -157,4 +180,14 @@ class TimerEngine(QObject):
         elif self._state in (TimerState.SHORT_BREAK, TimerState.LONG_BREAK):
             is_long = self._state == TimerState.LONG_BREAK
             self.break_ended.emit(is_long)
+
+            # 若当前已过每日截止时间，不再启动新番茄钟
+            end_str = self.config.get("work_end_time", "22:30")
+            eh, em = map(int, end_str.split(":"))
+            if datetime.now().time() >= time(eh, em):
+                self._state = TimerState.IDLE
+                self.state_changed.emit("idle")
+                self.tick.emit(-1, f"休息结束，已过计时时间 (至 {end_str})")
+                return
+
             self._start_work_session()

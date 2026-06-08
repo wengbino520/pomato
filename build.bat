@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 > nul
 REM ============================================================
 REM  POMATO PyInstaller 打包脚本
 REM  生成单个 exe 文件于 dist/ 目录

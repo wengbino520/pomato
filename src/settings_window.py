@@ -55,6 +55,10 @@ class SettingsWindow(QDialog):
         self.start_time.setDisplayFormat("HH:mm")
         tf.addRow("每日开始时间：", self.start_time)
 
+        self.end_time = QTimeEdit()
+        self.end_time.setDisplayFormat("HH:mm")
+        tf.addRow("每日截止时间：", self.end_time)
+
         self.pomodoro_dur = QSpinBox()
         self.pomodoro_dur.setRange(10, 60)
         self.pomodoro_dur.setSuffix(" 分钟")
@@ -201,6 +205,10 @@ class SettingsWindow(QDialog):
         h, m = map(int, start.split(":"))
         self.start_time.setTime(QTime(h, m))
 
+        end = self.config.get("work_end_time", "22:30")
+        eh, em = map(int, end.split(":"))
+        self.end_time.setTime(QTime(eh, em))
+
         self.pomodoro_dur.setValue(self.config.get("pomodoro_duration", 25))
         self.short_break.setValue(self.config.get("short_break_duration", 5))
         self.long_break.setValue(self.config.get("long_break_duration", 15))
@@ -222,6 +230,8 @@ class SettingsWindow(QDialog):
     def _save(self):
         t = self.start_time.time()
         self.config.set("work_start_time", f"{t.hour():02d}:{t.minute():02d}")
+        et = self.end_time.time()
+        self.config.set("work_end_time", f"{et.hour():02d}:{et.minute():02d}")
         self.config.set("pomodoro_duration", self.pomodoro_dur.value())
         self.config.set("short_break_duration", self.short_break.value())
         self.config.set("long_break_duration", self.long_break.value())

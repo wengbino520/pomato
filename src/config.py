@@ -9,6 +9,7 @@ WINDOWS_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 DEFAULT_CONFIG = {
     "work_start_time": "08:30",
+    "work_end_time": "22:30",
     "pomodoro_duration": 25,
     "short_break_duration": 5,
     "long_break_duration": 15,

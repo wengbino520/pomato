@@ -103,12 +103,21 @@ class TestStateTransitions:
 class TestBreakLogic:
     """第 N 个番茄结束后，根据 long_break_interval 判断长/短休息。"""
 
+    @staticmethod
+    def _work_time_mocks():
+        """返回 mock 的 datetime/date，时间固定在工作时段内（10:00）。"""
+        fixed = _real_dt(2026, 6, 1, 10, 0, 0)
+        return _dt_mocks(fixed)
+
     def _end_work(self, engine, session_no):
-        """辅助：把引擎设置为 WORK 并手动触发结束。"""
+        """辅助：把引擎设置为 WORK，mock 时间后在 work_end_time 之前触发结束。"""
         engine._state = TimerState.WORK
         engine._session_no = session_no
         engine._session_start = "09:00:00"
-        engine._handle_session_end()
+        mock_dt, mock_d = self._work_time_mocks()
+        with patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._handle_session_end()
 
     def test_4th_session_triggers_long_break(self, engine, tmp_config):
         tmp_config.set("long_break_interval", 4)
@@ -145,7 +154,10 @@ class TestBreakLogic:
         engine._state = TimerState.SHORT_BREAK
         engine._session_no = 1
         before = engine.session_no
-        engine._handle_session_end()
+        mock_dt, mock_d = self._work_time_mocks()
+        with patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._handle_session_end()
         assert engine.state == TimerState.WORK
         assert engine.session_no == before + 1
 
@@ -153,7 +165,10 @@ class TestBreakLogic:
         engine._state = TimerState.LONG_BREAK
         engine._session_no = 4
         before = engine.session_no
-        engine._handle_session_end()
+        mock_dt, mock_d = self._work_time_mocks()
+        with patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._handle_session_end()
         assert engine.state == TimerState.WORK
         assert engine.session_no == before + 1
 
@@ -446,3 +461,259 @@ class TestAutoStartWithHoliday:
             engine._on_tick()
 
         assert any("周末" in lbl for lbl in labels)
+
+
+# ── 每日计时截止时间（work_end_time）测试 ──────────────────────────────
+
+class TestWorkEndTimeIdle:
+    """IDLE 状态下 work_end_time 的边界判断。"""
+
+    def test_no_auto_start_after_end_time(self, engine, tmp_config):
+        """22:30 之后不应自动启动番茄钟。"""
+        tmp_config.set("work_start_time", "08:30")
+        tmp_config.set("work_end_time", "22:30")
+        tmp_config.set("holiday_check_enabled", False)
+        fixed = _real_dt(2026, 6, 1, 22, 31, 0)  # Monday 22:31
+        mock_dt, mock_d = _dt_mocks(fixed)
+        with patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._on_tick()
+        assert engine.state == TimerState.IDLE
+
+    def test_no_auto_start_exactly_at_end_time(self, engine, tmp_config):
+        """精确在 22:30:00 也不启动（>= 判断）。"""
+        tmp_config.set("work_start_time", "08:30")
+        tmp_config.set("work_end_time", "22:30")
+        tmp_config.set("holiday_check_enabled", False)
+        fixed = _real_dt(2026, 6, 1, 22, 30, 0)  # Monday 22:30
+        mock_dt, mock_d = _dt_mocks(fixed)
+        with patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._on_tick()
+        assert engine.state == TimerState.IDLE
+
+    def test_auto_start_before_end_time(self, engine, tmp_config):
+        """22:29 仍在工作时段内，应正常启动。"""
+        tmp_config.set("work_start_time", "08:30")
+        tmp_config.set("work_end_time", "22:30")
+        tmp_config.set("holiday_check_enabled", False)
+        fixed = _real_dt(2026, 6, 1, 22, 29, 0)  # Monday 22:29
+        mock_dt, mock_d = _dt_mocks(fixed)
+        with patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._on_tick()
+        assert engine.state == TimerState.WORK
+
+    def test_end_time_tick_label(self, engine, tmp_config):
+        """超出截止时间时 tick 信号携带正确提示。"""
+        tmp_config.set("work_end_time", "22:30")
+        tmp_config.set("holiday_check_enabled", False)
+        fixed = _real_dt(2026, 6, 1, 22, 31, 0)
+        mock_dt, mock_d = _dt_mocks(fixed)
+
+        labels = []
+        engine.tick.connect(lambda rem, lbl: labels.append(lbl))
+        with patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._on_tick()
+        assert any("22:30" in lbl for lbl in labels)
+
+    def test_end_time_has_priority_over_holiday(self, engine, tmp_config):
+        """截止时间判断优先于节假日判断：已过截止时间时不应显示节日标签。"""
+        fixed = _real_dt(2026, 1, 1, 22, 31, 0)
+        mock_dt, mock_d = _dt_mocks(fixed)
+
+        labels = []
+        engine.tick.connect(lambda rem, lbl: labels.append(lbl))
+
+        with patch.object(engine._holiday_manager, "is_workday", return_value=False), \
+             patch.object(engine._holiday_manager, "get_holiday_name", return_value="元旦"), \
+             patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._on_tick()
+
+        assert not any("元旦" in lbl for lbl in labels)
+        assert any("22:30" in lbl for lbl in labels)
+
+
+# ── 温和截止：运行中 session 自然结束逻辑测试 ────────────────────────────
+
+class TestGracefulEndTime:
+    """工作/休息结束后先检查截止时间，不打断正在运行的 session。"""
+
+    def _set_end_time_and_clock(self, tmp_config, engine, hour, minute, session_no=1):
+        """辅助：设置截止时间 + 设置 engine 为 WORK 状态，mock 时间。"""
+        tmp_config.set("work_end_time", "22:30")
+        engine._state = TimerState.WORK
+        engine._session_no = session_no
+        engine._session_start = "22:00:00"
+
+        fixed = _real_dt(2026, 6, 1, hour, minute, 0)
+        mock_dt, mock_d = _dt_mocks(fixed)
+        return mock_dt, mock_d
+
+    def test_work_ends_after_end_time_goes_idle(self, engine, tmp_config):
+        """工作番茄在截止时间后结束 → 回到 IDLE，不进入休息。"""
+        mock_dt, mock_d = self._set_end_time_and_clock(
+            tmp_config, engine, 22, 35
+        )
+        with patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._handle_session_end()
+        assert engine.state == TimerState.IDLE
+
+    def test_work_ends_before_end_time_enters_break(self, engine, tmp_config):
+        """工作番茄在截止时间前结束 → 正常进入休息。"""
+        mock_dt, mock_d = self._set_end_time_and_clock(
+            tmp_config, engine, 22, 10
+        )
+        with patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._handle_session_end()
+        assert engine.state in (TimerState.SHORT_BREAK, TimerState.LONG_BREAK)
+
+    def test_break_ends_after_end_time_goes_idle(self, engine, tmp_config):
+        """休息在截止时间后结束 → 回到 IDLE，不启动新番茄钟。"""
+        tmp_config.set("work_end_time", "22:30")
+        engine._state = TimerState.SHORT_BREAK
+        engine._session_no = 1
+
+        fixed = _real_dt(2026, 6, 1, 22, 35, 0)
+        mock_dt, mock_d = _dt_mocks(fixed)
+        with patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._handle_session_end()
+        assert engine.state == TimerState.IDLE
+
+    def test_break_ends_before_end_time_starts_new_work(self, engine, tmp_config):
+        """休息在截止时间前结束 → 正常启动新番茄钟。"""
+        tmp_config.set("work_end_time", "22:30")
+        engine._state = TimerState.SHORT_BREAK
+        engine._session_no = 1
+
+        fixed = _real_dt(2026, 6, 1, 22, 10, 0)
+        mock_dt, mock_d = _dt_mocks(fixed)
+        with patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._handle_session_end()
+        assert engine.state == TimerState.WORK
+
+    def test_work_ends_after_end_time_emits_signal_and_label(self, engine, tmp_config):
+        """截止后结束工作应发出 state_changed 信号和正确 tick 标签。"""
+        state_changes = []
+        tick_labels = []
+        engine.state_changed.connect(lambda s: state_changes.append(s))
+        engine.tick.connect(lambda rem, lbl: tick_labels.append(lbl))
+
+        mock_dt, mock_d = self._set_end_time_and_clock(
+            tmp_config, engine, 22, 35
+        )
+        with patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._handle_session_end()
+
+        assert "idle" in state_changes
+        assert any("22:30" in lbl for lbl in tick_labels)
+
+
+# ── 跨天 session_no 延迟重置测试 ────────────────────────────────────────
+
+class TestCrossDayReset:
+    """跨天时，正在运行的 session 不被打断，延迟到下次 _start_work_session 重置。"""
+
+    def test_idle_cross_day_resets_immediately(self, engine, tmp_config):
+        """IDLE 状态跨天 → session_no 立即归零。"""
+        tmp_config.set("work_start_time", "08:30")
+        tmp_config.set("holiday_check_enabled", False)
+        engine._today = "2026-06-01"
+        engine._session_no = 5
+
+        fixed = _real_dt(2026, 6, 2, 7, 0, 0)
+        mock_dt, mock_d = _dt_mocks(fixed)
+        with patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._on_tick()
+
+        assert engine._session_no == 0
+        assert engine._day_reset_pending is False
+
+    def test_work_cross_day_defers_reset(self, engine, tmp_config):
+        """WORK 状态跨天 → session_no 不变，标记 pending。"""
+        engine._state = TimerState.WORK
+        engine._session_no = 3
+        engine._today = "2026-06-01"
+        engine._day_reset_pending = False
+
+        fixed = _real_dt(2026, 6, 2, 0, 5, 0)
+        mock_dt, mock_d = _dt_mocks(fixed)
+        with patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._on_tick()
+
+        assert engine._session_no == 3
+        assert engine._day_reset_pending is True
+
+    def test_deferred_reset_applied_on_next_start_work(self, engine):
+        """pending 标记后首次 _start_work_session → session_no 归零再 +1。"""
+        engine._session_no = 7
+        engine._day_reset_pending = True
+        engine._start_work_session()
+        assert engine._session_no == 1
+        assert engine._day_reset_pending is False
+
+    def test_no_deferred_reset_without_pending(self, engine):
+        """无 pending 标记时 _start_work_session 正常递增。"""
+        engine._session_no = 3
+        engine._day_reset_pending = False
+        engine._start_work_session()
+        assert engine._session_no == 4
+
+    def test_break_cross_day_defers_reset(self, engine):
+        """BREAK 状态跨天同样延迟重置。"""
+        engine._state = TimerState.SHORT_BREAK
+        engine._session_no = 5
+        engine._remaining = 300          # 还剩 5 分钟，避免触发 _handle_session_end
+        engine._today = "2026-06-01"
+        engine._day_reset_pending = False
+
+        fixed = _real_dt(2026, 6, 2, 0, 10, 0)
+        mock_dt, mock_d = _dt_mocks(fixed)
+        with patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._on_tick()
+
+        assert engine._session_no == 5
+        assert engine._day_reset_pending is True
+
+    def test_full_cross_day_workflow(self, engine, tmp_config):
+        """完整跨天流程：WORK 跨天 → pending 标记 → 次日 _start_work_session 从 #1 开始。"""
+        tmp_config.set("work_start_time", "08:30")
+        tmp_config.set("holiday_check_enabled", False)
+        engine._state = TimerState.WORK
+        engine._session_no = 3
+        engine._remaining = 300          # 确保 tick 不触发 _handle_session_end
+        engine._session_start = "23:40:00"
+        engine._today = "2026-06-01"
+        engine._day_reset_pending = False
+
+        # 步骤1：跨天 tick（00:05 已过午夜），session 不受影响
+        fixed = _real_dt(2026, 6, 2, 0, 5, 0)
+        mock_dt, mock_d = _dt_mocks(fixed)
+        with patch("src.timer_engine.datetime", mock_dt), \
+             patch("src.timer_engine.date", mock_d):
+            engine._on_tick()
+        assert engine._session_no == 3
+        assert engine._day_reset_pending is True
+
+        # 步骤2：手动模拟 session 结束并回到 IDLE，第二天正常自动启动
+        engine._state = TimerState.IDLE
+        # session_no 仍然 = 3，pending = True
+        fixed2 = _real_dt(2026, 6, 2, 8, 30, 0)
+        mock_dt2, mock_d2 = _dt_mocks(fixed2)
+        with patch("src.timer_engine.datetime", mock_dt2), \
+             patch("src.timer_engine.date", mock_d2):
+            engine._on_tick()
+        # _start_work_session 应检测到 pending 并归零再 +1
+        assert engine.state == TimerState.WORK
+        assert engine._session_no == 1
+        assert engine._day_reset_pending is False
