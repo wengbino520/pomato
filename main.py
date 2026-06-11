@@ -12,6 +12,7 @@ if sys.platform == "win32":
     if _spec and _spec.origin:
         _qt6_bin = os.path.join(os.path.dirname(_spec.origin), "Qt6", "bin")
         if os.path.isdir(_qt6_bin):
+            os.add_dll_directory(_qt6_bin)
             # Pre-load newer runtime DLLs (order matters: leaves first)
             for _dll in [
                 "concrt140.dll",
@@ -26,7 +27,6 @@ if sys.platform == "win32":
                         ctypes.WinDLL(_p)
                     except OSError:
                         pass
-            os.add_dll_directory(_qt6_bin)
 # ──────────────────────────────────────────────────────────────────────────────
 
 # Ensure project root is importable

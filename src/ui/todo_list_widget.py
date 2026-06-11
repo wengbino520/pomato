@@ -37,18 +37,35 @@ class TodoListWidget(QWidget):
         self._priority_combo = QComboBox()
         self._priority_combo.addItems(["低", "中", "高"])
         self._priority_combo.setCurrentIndex(1)
+        self._priority_combo.setFixedWidth(52)
         self._priority_combo.setStyleSheet(
             "QComboBox { border:1px solid #ddd; border-radius:4px; "
-            "padding:4px 8px; font-size:12px; }"
+            "padding:3px 4px; font-size:12px; }"
         )
 
         self._due_date = QDateEdit()
         self._due_date.setCalendarPopup(True)
         self._due_date.setDate(QDate.currentDate())
+        self._due_date.setDisplayFormat("MM-dd")
+        self._due_date.setMinimumWidth(76)
         self._due_date.setStyleSheet(
-            "QDateEdit { border:1px solid #ddd; border-radius:4px; "
-            "padding:4px 8px; font-size:12px; max-width:110px; }"
+            "QDateEdit { border:1px solid #ddd; border-radius:2px; "
+            "padding:3px 4px; font-size:12px; min-width:76px; }"
         )
+
+        arrow_style = (
+            "QPushButton { border:1px solid #ddd; background:#fafafa; "
+            "font-size:10px; padding:0; }"
+            "QPushButton:hover { background:#eee; }"
+        )
+        date_prev = QPushButton("◀")
+        date_prev.setFixedSize(20, 22)
+        date_prev.setStyleSheet(arrow_style)
+        date_prev.clicked.connect(lambda: self._shift_date(-1))
+        date_next = QPushButton("▶")
+        date_next.setFixedSize(20, 22)
+        date_next.setStyleSheet(arrow_style)
+        date_next.clicked.connect(lambda: self._shift_date(1))
 
         add_btn = QPushButton("+")
         add_btn.setFixedWidth(32)
@@ -60,9 +77,11 @@ class TodoListWidget(QWidget):
         )
         add_btn.clicked.connect(self._on_add)
 
-        add_bar.addWidget(self._title_input, 3)
-        add_bar.addWidget(self._priority_combo, 1)
-        add_bar.addWidget(self._due_date, 1)
+        add_bar.addWidget(self._title_input, 1)
+        add_bar.addWidget(self._priority_combo)
+        add_bar.addWidget(date_prev)
+        add_bar.addWidget(self._due_date)
+        add_bar.addWidget(date_next)
         add_bar.addWidget(add_btn)
         layout.addLayout(add_bar)
 
@@ -74,7 +93,6 @@ class TodoListWidget(QWidget):
         self._cards_layout = QVBoxLayout(self._cards_widget)
         self._cards_layout.setContentsMargins(0, 0, 0, 0)
         self._cards_layout.setSpacing(4)
-        self._cards_layout.addStretch()
         self._scroll.setWidget(self._cards_widget)
         layout.addWidget(self._scroll, 1)
 
@@ -83,9 +101,10 @@ class TodoListWidget(QWidget):
         today = QDate.currentDate().toString("yyyy-MM-dd")
         todos = self._engine.get_todos(date_str=today, include_done=True)
 
-        # 清除旧卡片
-        for i in reversed(range(self._cards_layout.count())):
-            w = self._cards_layout.itemAt(i).widget()
+        # 彻底清空布局（takeAt 立即移除，deleteLater 延迟释放）
+        while self._cards_layout.count():
+            item = self._cards_layout.takeAt(0)
+            w = item.widget()
             if w:
                 w.deleteLater()
 
@@ -94,12 +113,10 @@ class TodoListWidget(QWidget):
             empty.setStyleSheet("color:#bbb; font-size:12px; padding:16px;")
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self._cards_layout.addWidget(empty)
+        else:
+            for todo in todos:
+                self._cards_layout.addWidget(self._make_card(todo))
 
-        for todo in todos:
-            card = self._make_card(todo)
-            self._cards_layout.insertWidget(self._cards_layout.count() - 1, card)
-
-        # Add stretch at end
         self._cards_layout.addStretch()
 
     # ------------------------------------------------------------------
@@ -108,9 +125,10 @@ class TodoListWidget(QWidget):
 
     def _make_card(self, todo: dict) -> QWidget:
         card = QFrame()
+        card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         card.setStyleSheet(
             "QFrame { background:white; border:1px solid #eee; "
-            "border-radius:6px; padding:2px; }"
+            "border-radius:4px; padding:2px; }"
             "QFrame:hover { border-color:#ddd; }"
         )
 
@@ -124,7 +142,7 @@ class TodoListWidget(QWidget):
         bar_color = colors.get(todo.get("priority", 1), "#9e9e9e")
         color_bar.setFixedWidth(4)
         color_bar.setStyleSheet(f"background:{bar_color}; border-radius:2px;")
-        color_bar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        color_bar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
 
         # Checkbox
         cb = QCheckBox()
@@ -141,19 +159,25 @@ class TodoListWidget(QWidget):
         title_label.setWordWrap(True)
         title_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
+        # Priority badge
+        priority_map = {2: ("高", "#ef5350"), 1: ("中", "#ff9800"), 0: ("低", "#9e9e9e")}
+        prio_text, prio_bg = priority_map.get(todo.get("priority", 1), ("中", "#ff9800"))
+        prio_badge = QLabel(prio_text)
+        prio_badge.setStyleSheet(
+            f"font-size:10px; color:#fff; background:{prio_bg}; "
+            "border-radius:3px; padding:1px 5px;"
+        )
+
         # Due date
         due = todo.get("due_date", "")
+        row.addWidget(color_bar)
+        row.addWidget(cb)
+        row.addWidget(title_label, 1)
+        row.addWidget(prio_badge)
         if due:
             due_label = QLabel(due)
             due_label.setStyleSheet("font-size:11px; color:#999;")
-            row.addWidget(color_bar)
-            row.addWidget(cb)
-            row.addWidget(title_label, 1)
             row.addWidget(due_label)
-        else:
-            row.addWidget(color_bar)
-            row.addWidget(cb)
-            row.addWidget(title_label, 1)
 
         # Edit / Delete buttons
         edit_btn = QPushButton("✎")
@@ -182,6 +206,10 @@ class TodoListWidget(QWidget):
     # ------------------------------------------------------------------
     # Handlers
     # ------------------------------------------------------------------
+
+    def _shift_date(self, days):
+        d = self._due_date.date().addDays(days)
+        self._due_date.setDate(d)
 
     def _on_add(self):
         title = self._title_input.text().strip()

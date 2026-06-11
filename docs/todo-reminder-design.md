@@ -1,8 +1,8 @@
 # POMATO 待办与提醒功能 —— 需求分析与技术设计文档
 
-> **版本**: v1.1  
+> **版本**: v1.2  
 > **日期**: 2026-06-11  
-> **状态**: ✅ 已实现 (Phase A + Phase B 全部完成)  
+> **状态**: ✅ Phase A+B 完成 | ✅ 一次性日期提醒 (v1.2) 已实现  
 > **关联项目**: POMATO 番茄日志助手（Python 3.13 + PyQt6 + SQLite）
 
 ---
@@ -269,6 +269,8 @@ CREATE TABLE IF NOT EXISTS reminders (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     title       TEXT    NOT NULL,             -- 提醒标题
     remind_time TEXT    NOT NULL,             -- 提醒时间 (HH:MM 格式)
+    remind_date TEXT,                         -- 一次性提醒的日期 (YYYY-MM-DD)，可空；
+                                              -- 有值且 repeat_type=none 则仅该日触发
     repeat_type TEXT    NOT NULL DEFAULT 'none',  -- none | daily | weekly | weekday
     repeat_days TEXT    DEFAULT '',           -- weekly 时存放 "1,3,5" (周几)
     enabled     INTEGER NOT NULL DEFAULT 1,   -- 是否启用

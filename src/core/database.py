@@ -66,6 +66,7 @@ class Database:
                     id          INTEGER PRIMARY KEY AUTOINCREMENT,
                     title       TEXT    NOT NULL,
                     remind_time TEXT    NOT NULL,
+                    remind_date TEXT,
                     repeat_type TEXT    NOT NULL DEFAULT 'none',
                     repeat_days TEXT    DEFAULT '',
                     enabled     INTEGER NOT NULL DEFAULT 1,
@@ -89,6 +90,12 @@ class Database:
             )
             try:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_todos_todo_date ON todos(todo_date)")
+            except Exception:
+                pass
+
+            # Migration: add remind_date column for one-time dated reminders
+            try:
+                conn.execute("ALTER TABLE reminders ADD COLUMN remind_date TEXT")
             except Exception:
                 pass
 
@@ -324,15 +331,17 @@ class Database:
     # Reminder CRUD methods (TASK-03)
     # ------------------------------------------------------------------
 
-    def add_reminder(self, title, remind_time, repeat_type="none",
-                     repeat_days="", snooze_min=10):
+    def add_reminder(self, title, remind_time, remind_date=None,
+                     repeat_type="none", repeat_days="", snooze_min=10):
         now = datetime.now().isoformat()
         with self._get_conn() as conn:
             cursor = conn.execute(
                 """INSERT INTO reminders
-                   (title, remind_time, repeat_type, repeat_days, enabled, snooze_min, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, 1, ?, ?, ?)""",
-                (title, remind_time, repeat_type, repeat_days, snooze_min, now, now),
+                   (title, remind_time, remind_date, repeat_type, repeat_days,
+                    enabled, snooze_min, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)""",
+                (title, remind_time, remind_date, repeat_type, repeat_days,
+                 snooze_min, now, now),
             )
             return cursor.lastrowid
 
@@ -360,8 +369,8 @@ class Database:
     def update_reminder(self, reminder_id, **kwargs):
         if not kwargs:
             return
-        allowed = {"title", "remind_time", "repeat_type", "repeat_days",
-                   "enabled", "snooze_min", "last_triggered"}
+        allowed = {"title", "remind_time", "remind_date", "repeat_type",
+                   "repeat_days", "enabled", "snooze_min", "last_triggered"}
         updates = {k: v for k, v in kwargs.items() if k in allowed}
         if not updates:
             return

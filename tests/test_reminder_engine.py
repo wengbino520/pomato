@@ -368,6 +368,70 @@ class TestMultipleReminders:
         assert len(spy) == 2
 
 
+class TestOneTimeDatedReminder:
+    """一次性日期提醒：指定日期的提醒仅在当天触发，次日不再触发。"""
+
+    def test_triggers_on_matching_date(self, reminder_engine):
+        """remind_date 匹配时触发。"""
+        reminder_engine.add_reminder("看牙医", "15:00", remind_date="2026-06-09")
+        mock_dt, mock_d = _mock_now(2026, 6, 9, 15, 0)
+        spy = spy_signal(reminder_engine.reminder_triggered)
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
+            reminder_engine.on_tick()
+        assert len(spy) == 1
+        assert spy[0][1] == "看牙医"
+
+    def test_skips_on_non_matching_date(self, reminder_engine):
+        """remind_date 不匹配时不触发。"""
+        reminder_engine.add_reminder("看牙医", "15:00", remind_date="2026-06-09")
+        mock_dt, mock_d = _mock_now(2026, 6, 10, 15, 0)  # next day
+        spy = spy_signal(reminder_engine.reminder_triggered)
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
+            reminder_engine.on_tick()
+        assert len(spy) == 0
+
+    def test_not_triggered_again_next_day(self, reminder_engine):
+        """已触发的一次性提醒次日不再触发。"""
+        reminder_engine.add_reminder("一次性", "09:00", remind_date="2026-06-09")
+        # Day 1: trigger
+        mock_dt1, mock_d1 = _mock_now(2026, 6, 9, 9, 0)
+        spy = spy_signal(reminder_engine.reminder_triggered)
+        with patch("src.services.reminder_engine.datetime", mock_dt1), \
+             patch("src.services.reminder_engine.date", mock_d1):
+            reminder_engine.on_tick()
+        assert len(spy) == 1
+        # Day 2: should NOT trigger
+        mock_dt2, mock_d2 = _mock_now(2026, 6, 10, 9, 0)
+        with patch("src.services.reminder_engine.datetime", mock_dt2), \
+             patch("src.services.reminder_engine.date", mock_d2):
+            reminder_engine.on_tick()
+        assert len(spy) == 1  # no new signal
+
+    def test_old_none_without_date_still_triggers_daily(self, reminder_engine):
+        """向后兼容：无 remind_date 的 none 提醒仍按每天触发。"""
+        reminder_engine.add_reminder("老提醒", "12:00", remind_date=None)
+        mock_dt, mock_d = _mock_now(2026, 6, 9, 12, 0)
+        spy = spy_signal(reminder_engine.reminder_triggered)
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
+            reminder_engine.on_tick()
+        assert len(spy) == 1
+
+    def test_daily_with_date_ignores_date_and_triggers_every_day(self, reminder_engine):
+        """daily 重复忽略 remind_date，每天触发。"""
+        reminder_engine.add_reminder("每日", "08:00",
+                                     remind_date="2026-06-01",
+                                     repeat_type="daily")
+        mock_dt, mock_d = _mock_now(2026, 6, 9, 8, 0)
+        spy = spy_signal(reminder_engine.reminder_triggered)
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
+            reminder_engine.on_tick()
+        assert len(spy) == 1
+
+
 # ═══════════════════════════════════════════════════════════════════
 # TASK-26: TimerEngine tick 集成
 # ═══════════════════════════════════════════════════════════════════

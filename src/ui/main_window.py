@@ -301,6 +301,13 @@ class MainWindow(QMainWindow):
     def _setup_ui(self):
         self.setWindowTitle("POMATO 番茄日志")
         self.setMinimumSize(600, 460)
+        self.resize(1200, 742)
+
+        # 居中显示
+        qr = self.frameGeometry()
+        cp = self.screen().availableGeometry().center()
+        qr.moveCenter(cp)
+        self.move(qr.topLeft())
 
         central = QWidget()
         self.setCentralWidget(central)

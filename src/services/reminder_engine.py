@@ -51,10 +51,10 @@ class ReminderEngine(QObject):
             if r.get("last_triggered") == today
         }
 
-    def add_reminder(self, title, remind_time, repeat_type="none",
-                     repeat_days="", snooze_min=10):
-        rid = self.db.add_reminder(title, remind_time, repeat_type,
-                                   repeat_days, snooze_min)
+    def add_reminder(self, title, remind_time, remind_date=None,
+                     repeat_type="none", repeat_days="", snooze_min=10):
+        rid = self.db.add_reminder(title, remind_time, remind_date,
+                                   repeat_type, repeat_days, snooze_min)
         self._reload_reminders()
         return rid
 
@@ -157,9 +157,15 @@ class ReminderEngine(QObject):
                 continue
 
             repeat_type = r.get("repeat_type", "none")
-            if repeat_type == RepeatType.WEEKDAY and weekday >= 5:
+            remind_date = r.get("remind_date")
+
+            # One-time dated reminder: skip if date doesn't match
+            if repeat_type == RepeatType.NONE and remind_date:
+                if remind_date != today_str:
+                    continue
+            elif repeat_type == RepeatType.WEEKDAY and weekday >= 5:
                 continue
-            if repeat_type == RepeatType.WEEKLY:
+            elif repeat_type == RepeatType.WEEKLY:
                 days = r.get("repeat_days", "").split(",")
                 if str(weekday) not in days:
                     continue

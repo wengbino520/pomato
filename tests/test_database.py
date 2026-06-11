@@ -260,3 +260,32 @@ class TestDatabaseExceptionScenarios:
         entries = db2.get_entries_by_date("2026-06-02")
         assert len(entries) == 1
         assert entries[0]["content"] == "数据"
+
+
+# ── Reminder with remind_date ──────────────────────────────────────────────────
+
+class TestReminderWithDate:
+    """一次性日期提醒的 DB CRUD。"""
+
+    def test_add_reminder_with_date(self, tmp_db):
+        rid = tmp_db.add_reminder("看牙医", "15:00", remind_date="2026-06-15")
+        r = tmp_db.get_reminder(rid)
+        assert r["remind_date"] == "2026-06-15"
+        assert r["repeat_type"] == "none"
+
+    def test_add_reminder_without_date(self, tmp_db):
+        rid = tmp_db.add_reminder("每日", "09:00")
+        r = tmp_db.get_reminder(rid)
+        assert r["remind_date"] is None
+
+    def test_update_reminder_date(self, tmp_db):
+        rid = tmp_db.add_reminder("会议", "14:00", remind_date="2026-06-10")
+        tmp_db.update_reminder(rid, remind_date="2026-06-20")
+        r = tmp_db.get_reminder(rid)
+        assert r["remind_date"] == "2026-06-20"
+
+    def test_clear_reminder_date(self, tmp_db):
+        rid = tmp_db.add_reminder("会议", "14:00", remind_date="2026-06-10")
+        tmp_db.update_reminder(rid, remind_date=None)
+        r = tmp_db.get_reminder(rid)
+        assert r["remind_date"] is None

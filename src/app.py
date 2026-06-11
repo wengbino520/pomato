@@ -66,6 +66,15 @@ class TrayManager(QObject):
         settings_action = menu.addAction("⚙  设置")
         settings_action.triggered.connect(self.show_settings)
 
+        # Pre-create main window (hidden) — 必须在菜单项之前创建
+        self.main_window = MainWindow(
+            self.config, self.db, self.timer,
+            on_generate_report=self.show_report_window,
+        )
+        # Phase B: 注入 ReminderEngine → 初始化待办/提醒 Tab
+        if self._reminder_engine:
+            self.main_window.set_reminder_engine(self._reminder_engine)
+
         menu.addSeparator()
 
         # ---- TASK-16/Phase B: 待办 + 提醒菜单项 → 主窗口 Tab ----
@@ -94,15 +103,6 @@ class TrayManager(QObject):
             self._reminder_engine.reminder_triggered.connect(
                 self._on_reminder_triggered
             )
-
-        # Pre-create main window (hidden)
-        self.main_window = MainWindow(
-            self.config, self.db, self.timer,
-            on_generate_report=self.show_report_window,
-        )
-        # Phase B: 注入 ReminderEngine → 初始化待办/提醒 Tab
-        if self._reminder_engine:
-            self.main_window.set_reminder_engine(self._reminder_engine)
 
     # ------------------------------------------------------------------
     # Icon factory
