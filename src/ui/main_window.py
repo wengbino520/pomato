@@ -17,12 +17,15 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSpinBox,
+    QTabWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
 from src.ui.history_window import HistoryWindow
+from src.ui.todo_list_widget import TodoListWidget
+from src.ui.reminder_list_widget import ReminderListWidget
 
 
 class EditEntryDialog(QDialog):
@@ -394,7 +397,14 @@ class MainWindow(QMainWindow):
         sl.addWidget(self.timer_status)
         root.addWidget(stats)
 
-        # ── entry list ─────────────────────────────────────────────────
+        # ── tab widget (🍅番茄 / 📋待办 / ⏰提醒) ──────────────────────
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setStyleSheet(
+            "QTabWidget::pane { border:none; }"
+            "QTabBar::tab { padding:6px 18px; font-size:13px; }"
+        )
+
+        # Tab 0: 番茄记录
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border:none; background:#f8f8f8; }")
@@ -407,7 +417,20 @@ class MainWindow(QMainWindow):
         self.entries_layout.addStretch()
 
         scroll.setWidget(self.entries_container)
-        root.addWidget(scroll, 1)
+        self.tab_widget.addTab(scroll, "🍅 番茄")
+
+        # Tab 1/2: 待办 & 提醒 (延迟初始化，由 set_reminder_engine 填充)
+        self._todo_tab = QWidget()
+        self._todo_tab_layout = QVBoxLayout(self._todo_tab)
+        self._todo_tab_layout.setContentsMargins(0, 0, 0, 0)
+        self.tab_widget.addTab(self._todo_tab, "📋 待办")
+
+        self._reminder_tab = QWidget()
+        self._reminder_tab_layout = QVBoxLayout(self._reminder_tab)
+        self._reminder_tab_layout.setContentsMargins(0, 0, 0, 0)
+        self.tab_widget.addTab(self._reminder_tab, "⏰ 提醒")
+
+        root.addWidget(self.tab_widget, 1)
 
         # ── bottom action bar ──────────────────────────────────────────
         bottom = QWidget()
@@ -555,6 +578,34 @@ class MainWindow(QMainWindow):
             added += 1
         if added:
             self.refresh()
+
+    # ------------------------------------------------------------------
+    # Phase B: Tab 切换 + 待办/提醒嵌入
+    # ------------------------------------------------------------------
+
+    def set_reminder_engine(self, engine):
+        """注入 ReminderEngine，初始化待办/提醒 Tab（由 TrayManager 调用）。"""
+        self._reminder_engine = engine
+
+        self._todo_widget = TodoListWidget(engine)
+        self._todo_tab_layout.addWidget(self._todo_widget)
+        self._todo_widget.refresh()
+
+        self._reminder_widget = ReminderListWidget(engine)
+        self._reminder_tab_layout.addWidget(self._reminder_widget)
+
+    def switch_to_todo_tab(self):
+        self.show()
+        self.raise_()
+        self.tab_widget.setCurrentIndex(1)
+
+    def switch_to_reminder_tab(self):
+        self.show()
+        self.raise_()
+        self.tab_widget.setCurrentIndex(2)
+
+    def switch_to_pomodoro_tab(self):
+        self.tab_widget.setCurrentIndex(0)
 
     def closeEvent(self, a0: QCloseEvent | None):
         # Hide to tray instead of quitting

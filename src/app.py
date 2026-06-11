@@ -68,12 +68,12 @@ class TrayManager(QObject):
 
         menu.addSeparator()
 
-        # ---- TASK-16: 待办 + 提醒菜单项 ----
+        # ---- TASK-16/Phase B: 待办 + 提醒菜单项 → 主窗口 Tab ----
         if self._reminder_engine:
             todo_action = menu.addAction("📋  待办")
-            todo_action.triggered.connect(self._show_todo_dialog)
+            todo_action.triggered.connect(self.main_window.switch_to_todo_tab)
             reminder_action = menu.addAction("⏰  提醒")
-            reminder_action.triggered.connect(self._show_reminder_dialog)
+            reminder_action.triggered.connect(self.main_window.switch_to_reminder_tab)
             menu.addSeparator()
 
         quit_action = menu.addAction("退出")
@@ -100,6 +100,9 @@ class TrayManager(QObject):
             self.config, self.db, self.timer,
             on_generate_report=self.show_report_window,
         )
+        # Phase B: 注入 ReminderEngine → 初始化待办/提醒 Tab
+        if self._reminder_engine:
+            self.main_window.set_reminder_engine(self._reminder_engine)
 
     # ------------------------------------------------------------------
     # Icon factory
@@ -344,13 +347,3 @@ class TrayManager(QObject):
 
     def _on_reminder_dismissed(self, reminder_id: int):
         pass  # Already marked triggered in engine
-
-    def _show_todo_dialog(self):
-        from src.ui.todo_dialog import TodoDialog
-        if self._reminder_engine:
-            TodoDialog(self._reminder_engine).exec()
-
-    def _show_reminder_dialog(self):
-        from src.ui.reminder_dialog import ReminderDialog
-        if self._reminder_engine:
-            ReminderDialog(self._reminder_engine).exec()
