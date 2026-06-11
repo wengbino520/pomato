@@ -226,15 +226,18 @@ class TrayManager(QObject):
         today = date.today().isoformat()
         # 使用 DB 统一分配的序号，而非 TimerEngine 内部计数
         db_session_no = self.db.get_next_session_no(today)
-        previous_content = self.db.get_latest_valid_entry_content(today)
+        previous_content, previous_tags = self.db.get_latest_valid_entry(today)
         popup = PopupWindow(db_session_no, self.config,
                             previous_content=previous_content,
+                            previous_tags=previous_tags,
                             reminder_engine=self._reminder_engine)
         self._active_popup = popup
 
         def on_submitted(content: str, tags: list[str], todo_id: int = 0):
             day = date.today().isoformat()
-            self.db.add_entry(day, db_session_no, start_time, end_time, content, tags)
+            entry_id = self.db.add_entry(day, db_session_no, start_time, end_time, content, tags)
+            if todo_id and entry_id and self._reminder_engine:
+                self._reminder_engine.update_todo(todo_id, pomodoro_id=entry_id, status="done")
             if self.main_window:
                 self.main_window.refresh()
             self._active_popup = None

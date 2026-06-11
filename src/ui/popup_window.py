@@ -23,12 +23,14 @@ class PopupWindow(QDialog):
     timed_out = pyqtSignal()
 
     def __init__(self, session_no: int, config, previous_content: str = "",
+                 previous_tags: list[str] | None = None,
                  parent=None, reminder_engine=None):
         super().__init__(parent)
         self.session_no = session_no
         self.config = config
         self._reminder_engine = reminder_engine
         self.previous_content = (previous_content or "").strip()
+        self.previous_tags = previous_tags or []
         self.selected_tags: list[str] = []
         self._selected_todo_id = 0
         self.timeout_seconds = max(10, int(self.config.get("popup_timeout_seconds", 180)))
@@ -44,9 +46,11 @@ class PopupWindow(QDialog):
 
     def _setup_window(self):
         self.setWindowTitle(f"POMATO · 第{self.session_no}个番茄钟完成")
+        # Dialog → Window: 避免 Linux 下输入法框架 (fcitx/ibus) 忽略弹窗
         self.setWindowFlags(
-            Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Dialog
+            Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Window
         )
+        self.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled, True)
         self.setMinimumWidth(440)
         self.setModal(False)
 
@@ -171,7 +175,7 @@ class PopupWindow(QDialog):
         skip_btn.clicked.connect(self._on_skip)
 
         repeat_btn = QPushButton("重复上一条")
-        repeat_btn.setEnabled(bool(self.previous_content))
+        repeat_btn.setEnabled(bool(self.previous_content) or bool(self.previous_tags))
         repeat_btn.setStyleSheet(
             """
             QPushButton {
@@ -272,6 +276,13 @@ class PopupWindow(QDialog):
             self.text_edit.setPlainText(self.previous_content)
             self.text_edit.setFocus()
             self.text_edit.moveCursor(QTextCursor.MoveOperation.End)
+        if self.previous_tags:
+            for tag in self.previous_tags:
+                if tag in self.tag_buttons:
+                    btn = self.tag_buttons[tag]
+                    if tag not in self.selected_tags:
+                        self.selected_tags.append(tag)
+                    btn.setStyleSheet(self._tag_style(True))
 
     def _on_timeout(self):
         if not self.isVisible():

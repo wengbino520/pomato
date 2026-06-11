@@ -36,9 +36,11 @@ class ReminderPopup(QDialog):
 
     def _setup_window(self):
         self.setWindowTitle("⏰ 提醒")
+        # Dialog → Window: 避免 Linux 下输入法框架 (fcitx/ibus) 忽略弹窗
         self.setWindowFlags(
-            Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Dialog
+            Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Window
         )
+        self.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled, True)
         self.setMinimumWidth(380)
         self.setModal(False)
         self.setStyleSheet("QDialog { background:#fff; }")

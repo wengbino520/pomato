@@ -109,10 +109,11 @@ class EditEntryDialog(QDialog):
 
 
 class AddEntryDialog(QDialog):
-    """手动补录条目：可填写时间段、内容与标签。"""
+    """手动补录条目：可填写时间段、内容、标签，关联待办。"""
 
-    def __init__(self, tags: list[str], parent=None):
+    def __init__(self, tags: list[str], parent=None, reminder_engine=None):
         super().__init__(parent)
+        self._reminder_engine = reminder_engine
         self.setWindowTitle("手动补录")
         self.setMinimumWidth(420)
 
@@ -168,6 +169,39 @@ class AddEntryDialog(QDialog):
         self.tags_combo.setPlaceholderText("可输入多个标签，逗号分隔")
         layout.addWidget(self.tags_combo)
 
+        # ---- 关联待办 ----
+        from datetime import date
+        from PyQt6.QtWidgets import QCheckBox
+        self._todo_row = QWidget()
+        todo_row_layout = QHBoxLayout(self._todo_row)
+        todo_row_layout.setContentsMargins(0, 0, 0, 0)
+        todo_row_layout.setSpacing(8)
+
+        todo_label = QLabel("关联待办：")
+        todo_label.setStyleSheet("font-size:12px; color:#666;")
+        self._todo_combo = QComboBox()
+        self._todo_combo.addItem("（不关联）", 0)
+        self._todo_combo.setStyleSheet(
+            "QComboBox { border:1px solid #ddd; border-radius:4px; padding:4px 8px; font-size:12px; }"
+        )
+        self._todo_done_cb = QCheckBox("标记完成")
+        self._todo_done_cb.setStyleSheet("font-size:12px; color:#666;")
+
+        todo_row_layout.addWidget(todo_label)
+        todo_row_layout.addWidget(self._todo_combo, 1)
+        todo_row_layout.addWidget(self._todo_done_cb)
+        layout.addWidget(self._todo_row)
+
+        if self._reminder_engine:
+            today_str = date.today().isoformat()
+            todos = self._reminder_engine.get_todos(
+                date_str=today_str, include_done=False
+            )
+            for t in todos:
+                self._todo_combo.addItem(t["title"], t["id"])
+        else:
+            self._todo_row.setVisible(False)
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save |
             QDialogButtonBox.StandardButton.Cancel
@@ -195,6 +229,14 @@ class AddEntryDialog(QDialog):
         raw_tags = self.tags_combo.currentText().strip()
         tags = [t.strip() for t in raw_tags.split(",") if t.strip()]
         return start, end, content, tags
+
+    def get_todo_info(self) -> tuple[int, bool]:
+        """返回 (todo_id, 是否标记完成)。0 表示未关联。"""
+        if not self._reminder_engine or not self._todo_row.isVisible():
+            return 0, False
+        todo_id = self._todo_combo.currentData() or 0
+        mark_done = self._todo_done_cb.isChecked()
+        return todo_id, mark_done
 
 
 class EntryItem(QFrame):
@@ -576,12 +618,20 @@ class MainWindow(QMainWindow):
         target_date = self.view_date.isoformat()
         added = 0
         while True:
-            dlg = AddEntryDialog(tags, self)
+            dlg = AddEntryDialog(tags, self, reminder_engine=getattr(self, '_reminder_engine', None))
             if dlg.exec() != QDialog.DialogCode.Accepted:
                 break
             start, end, content, selected_tags = dlg.get_values()
+            todo_id, mark_done = dlg.get_todo_info()
             session_no = self.db.get_next_session_no(target_date)
-            self.db.add_entry(target_date, session_no, start, end, content, selected_tags, skipped=False)
+            entry_id = self.db.add_entry(target_date, session_no, start, end, content, selected_tags, skipped=False)
+            if todo_id and entry_id:
+                engine = getattr(self, '_reminder_engine', None)
+                if engine:
+                    if mark_done:
+                        engine.update_todo(todo_id, pomodoro_id=entry_id, status="done")
+                    else:
+                        engine.update_todo(todo_id, pomodoro_id=entry_id)
             added += 1
         if added:
             self.refresh()

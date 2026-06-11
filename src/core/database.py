@@ -193,15 +193,27 @@ class Database:
             ).fetchone()
         return (row["max_no"] if row else 0) + 1
 
-    def get_latest_valid_entry_content(self, date_str):
+    def get_latest_valid_entry(self, date_str):
+        """Return (content, tags) of the latest non-skipped entry, or ("", [])."""
         with self._get_conn() as conn:
             row = conn.execute(
-                """SELECT content FROM pomodoro_entries
+                """SELECT content, tags FROM pomodoro_entries
                    WHERE date=? AND skipped=0 AND content IS NOT NULL AND TRIM(content) != ''
                    ORDER BY start_time DESC, end_time DESC LIMIT 1""",
                 (date_str,),
             ).fetchone()
-        return row["content"] if row else ""
+        if row:
+            try:
+                tags = json.loads(row["tags"])
+            except (json.JSONDecodeError, TypeError):
+                tags = []
+            return row["content"], tags
+        return "", []
+
+    def get_latest_valid_entry_content(self, date_str):
+        """Backward-compat wrapper: returns content string only."""
+        content, _ = self.get_latest_valid_entry(date_str)
+        return content
 
     def search_reports(self, keyword: str):
         kw = (keyword or "").strip()
