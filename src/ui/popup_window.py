@@ -118,7 +118,7 @@ class PopupWindow(QDialog):
         layout.addWidget(tags_widget)
 
         # ---- TASK-21: 关联待办 ----
-        from PyQt6.QtWidgets import QComboBox
+        from PyQt6.QtWidgets import QCheckBox, QComboBox
         from datetime import date
         self._todo_row = QWidget()
         todo_row_layout = QHBoxLayout(self._todo_row)

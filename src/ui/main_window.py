@@ -146,8 +146,10 @@ class EditEntryDialog(QDialog):
 
     def get_todo_info(self) -> tuple[int, bool]:
         """返回 (todo_id, 是否标记完成)。0 表示未关联。(F7-07)"""
-        if not self._reminder_engine or not self._todo_row.isVisible():
+        if not self._reminder_engine:
             return 0, False
+        # NOTE: 不能检查 _todo_row.isVisible()——dlg.exec() 返回后对话框已关闭，
+        #       此时 isVisible() 始终为 False。
         todo_id = self._todo_combo.currentData() or 0
         mark_done = self._todo_done_cb.isChecked()
         return todo_id, mark_done
@@ -277,7 +279,7 @@ class AddEntryDialog(QDialog):
 
     def get_todo_info(self) -> tuple[int, bool]:
         """返回 (todo_id, 是否标记完成)。0 表示未关联。"""
-        if not self._reminder_engine or not self._todo_row.isVisible():
+        if not self._reminder_engine:
             return 0, False
         todo_id = self._todo_combo.currentData() or 0
         mark_done = self._todo_done_cb.isChecked()
@@ -625,6 +627,12 @@ class MainWindow(QMainWindow):
                 item.delete_requested.connect(self._on_delete_entry)
                 self.entries_layout.insertWidget(i, item)
 
+        # Also refresh todo/reminder widgets if available (F7-07 fix)
+        if hasattr(self, '_todo_widget'):
+            self._todo_widget.refresh()
+        if hasattr(self, '_reminder_widget'):
+            self._reminder_widget.refresh()
+
     # ------------------------------------------------------------------
     # Slots
     # ------------------------------------------------------------------
@@ -676,8 +684,9 @@ class MainWindow(QMainWindow):
                         engine.update_todo(todo_id, pomodoro_id=entry["id"], status="done")
                     else:
                         engine.update_todo(todo_id, pomodoro_id=entry["id"])
+                elif todo_id and todo_id == old_todo_id and mark_done:
+                    engine.update_todo(todo_id, pomodoro_id=entry["id"], status="done")
                 elif not todo_id and old_todo_id:
-                    # Unlink: clear pomodoro_id on the todo side too
                     engine.update_todo(old_todo_id, pomodoro_id=None)
             self.refresh()
 

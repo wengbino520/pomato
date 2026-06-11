@@ -238,8 +238,9 @@ class TrayManager(QObject):
             # F7-07: pass todo_id to add_entry for bidirectional linking
             entry_id = self.db.add_entry(day, db_session_no, start_time, end_time,
                                          content, tags, todo_id=todo_id if todo_id else None)
+            # F7-07: link pomodoro entry to todo (status already handled by popup)
             if todo_id and entry_id and self._reminder_engine:
-                self._reminder_engine.update_todo(todo_id, pomodoro_id=entry_id, status="done")
+                self._reminder_engine.update_todo(todo_id, pomodoro_id=entry_id)
             if self.main_window:
                 self.main_window.refresh()
             self._active_popup = None

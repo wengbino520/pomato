@@ -413,3 +413,107 @@ class TestTodoPomodoroLinking:
             )
         entry = tmp_db.get_entry(eid)
         assert entry["todo_id"] == tid
+
+    # ── End-to-end: 编辑已存在记录 → 关联待办 → 标记完成 ──────────────────
+
+    def test_e2e_edit_existing_entry_link_todo_and_mark_done(self, tmp_db):
+        """
+        模拟用户操作：补录一条记录 → 创建待办 → 编辑记录关联待办并勾选"标记完成"。
+
+        这是 F7-07 最常见的用户路径，必须保证两侧数据一致。
+        """
+        # Step 1: 用户补录了一条番茄记录（未关联任何待办）
+        today = "2026-06-12"
+        eid = add(tmp_db, date=today, session_no=1, content="写了一个工具脚本")
+
+        # Step 2: 用户创建了一个待办
+        tid = tmp_db.add_todo("写工具脚本", priority=2, todo_date=today)
+
+        # Step 3: 用户对补录记录点"编辑"，选择了"写工具脚本"并勾选"标记完成"
+        #    这就是 _on_edit_entry 中执行的逻辑
+        tmp_db.update_entry(eid, "写了一个工具脚本", [], start_time="09:00:00",
+                            end_time="09:25:00", todo_id=tid)
+        # 同时更新 todo 侧 — 标记完成 + 建立反向引用
+        tmp_db.update_todo(tid, pomodoro_id=eid, status="done")
+
+        # ── 验证番茄条目侧 ──
+        entry = tmp_db.get_entry(eid)
+        assert entry is not None, "条目应该存在"
+        assert entry["todo_id"] == tid, f"entry.todo_id 应为 {tid}，实际 {entry['todo_id']}"
+        assert entry["todo_title"] == "写工具脚本", (
+            f"entry.todo_title 应为 '写工具脚本'，实际 {entry['todo_title']!r}"
+        )
+
+        # 通过 get_entries_by_date 也能拿到关联信息
+        entries = tmp_db.get_entries_by_date(today)
+        assert len(entries) == 1
+        assert entries[0]["todo_id"] == tid
+        assert entries[0]["todo_title"] == "写工具脚本"
+
+        # ── 验证待办侧 ──
+        todo = tmp_db.get_todo(tid)
+        assert todo is not None, "待办应该存在"
+        assert todo["status"] == "done", (
+            f"待办状态应为 'done'，实际 {todo['status']!r}"
+        )
+        assert todo["pomodoro_id"] == eid, (
+            f"待办 pomodoro_id 应为 {eid}，实际 {todo['pomodoro_id']}"
+        )
+        assert todo["title"] == "写工具脚本"
+
+    def test_e2e_edit_existing_entry_link_todo_without_mark_done(self, tmp_db):
+        """
+        模拟用户操作：编辑记录关联待办但**不勾选**"标记完成"。
+        此时待办状态应保持 pending，仅建立双向引用。
+        """
+        today = "2026-06-12"
+        eid = add(tmp_db, date=today, session_no=1, content="开始写文档")
+
+        tid = tmp_db.add_todo("写接口文档", priority=2, todo_date=today)
+
+        # 编辑关联但不标记完成
+        tmp_db.update_entry(eid, "开始写文档", [], todo_id=tid)
+        tmp_db.update_todo(tid, pomodoro_id=eid)  # 不传 status
+
+        entry = tmp_db.get_entry(eid)
+        assert entry["todo_id"] == tid
+        assert entry["todo_title"] == "写接口文档"
+
+        todo = tmp_db.get_todo(tid)
+        assert todo["status"] == "pending", (
+            f"不勾选标记完成时，待办状态应为 'pending'，实际 {todo['status']!r}"
+        )
+        assert todo["pomodoro_id"] == eid
+
+    def test_e2e_edit_existing_entry_same_todo_toggle_done(self, tmp_db):
+        """
+        模拟用户操作：记录已关联待办 A，再次编辑只勾选"标记完成"（待办不变）。
+        这是上一轮修复的核心场景 — 之前因 todo_id == old_todo_id 跳过了。
+        """
+        today = "2026-06-12"
+        # 先创建待办和关联记录
+        tid = tmp_db.add_todo("写接口文档", priority=2, todo_date=today)
+        eid = add(tmp_db, date=today, session_no=1, content="写接口文档",
+                   todo_id=tid)
+        tmp_db.update_todo(tid, pomodoro_id=eid)
+
+        # 确认初始状态：待办未完成
+        todo = tmp_db.get_todo(tid)
+        assert todo["status"] == "pending", "初始状态应为 pending"
+
+        # 用户编辑同一条记录，只勾"标记完成"（不改变关联）
+        # _on_edit_entry 中的逻辑:
+        #   todo_id == old_todo_id, mark_done=True
+        #   → engine.update_todo(todo_id, status="done")
+        tmp_db.update_todo(tid, status="done")
+
+        # ── 验证 ──
+        todo = tmp_db.get_todo(tid)
+        assert todo["status"] == "done", (
+            f"勾选标记完成后待办状态应为 'done'，实际 {todo['status']!r}"
+        )
+        # 关联关系不应被破坏
+        entry = tmp_db.get_entry(eid)
+        assert entry["todo_id"] == tid
+        assert entry["todo_title"] == "写接口文档"
+
