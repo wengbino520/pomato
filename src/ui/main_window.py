@@ -29,10 +29,11 @@ from src.ui.reminder_list_widget import ReminderListWidget
 
 
 class EditEntryDialog(QDialog):
-    """编辑条目：可修改时间段、内容与标签。"""
+    """编辑条目：可修改时间段、内容、标签与关联待办 (F7-07)。"""
 
-    def __init__(self, entry: dict, avail_tags: list[str], parent=None):
+    def __init__(self, entry: dict, avail_tags: list[str], parent=None, reminder_engine=None):
         super().__init__(parent)
+        self._reminder_engine = reminder_engine
         self.setWindowTitle("编辑记录")
         self.setMinimumWidth(420)
         layout = QVBoxLayout(self)
@@ -84,6 +85,42 @@ class EditEntryDialog(QDialog):
         layout.addWidget(QLabel("标签："))
         layout.addWidget(self.tags_combo)
 
+        # ---- F7-07: 关联待办 ----
+        from datetime import date
+        from PyQt6.QtWidgets import QCheckBox
+        self._todo_row = QWidget()
+        todo_row_layout = QHBoxLayout(self._todo_row)
+        todo_row_layout.setContentsMargins(0, 0, 0, 0)
+        todo_row_layout.setSpacing(8)
+
+        todo_label = QLabel("关联待办：")
+        todo_label.setStyleSheet("font-size:12px; color:#666;")
+        self._todo_combo = QComboBox()
+        self._todo_combo.addItem("（不关联）", 0)
+        self._todo_combo.setStyleSheet(
+            "QComboBox { border:1px solid #ddd; border-radius:4px; padding:4px 8px; font-size:12px; }"
+        )
+        self._todo_done_cb = QCheckBox("标记完成")
+        self._todo_done_cb.setStyleSheet("font-size:12px; color:#666;")
+
+        todo_row_layout.addWidget(todo_label)
+        todo_row_layout.addWidget(self._todo_combo, 1)
+        todo_row_layout.addWidget(self._todo_done_cb)
+        layout.addWidget(self._todo_row)
+
+        current_todo_id = entry.get("todo_id")
+        if self._reminder_engine:
+            today_str = date.today().isoformat()
+            todos = self._reminder_engine.get_todos(
+                date_str=today_str, include_done=False
+            )
+            for t in todos:
+                self._todo_combo.addItem(t["title"], t["id"])
+                if t["id"] == current_todo_id:
+                    self._todo_combo.setCurrentIndex(self._todo_combo.count() - 1)
+        elif not current_todo_id:
+            self._todo_row.setVisible(False)
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save |
             QDialogButtonBox.StandardButton.Cancel
@@ -106,6 +143,14 @@ class EditEntryDialog(QDialog):
         content = self.text_edit.toPlainText().strip()
         tags = [t.strip() for t in self.tags_combo.currentText().split(",") if t.strip()]
         return start, end, content, tags
+
+    def get_todo_info(self) -> tuple[int, bool]:
+        """返回 (todo_id, 是否标记完成)。0 表示未关联。(F7-07)"""
+        if not self._reminder_engine or not self._todo_row.isVisible():
+            return 0, False
+        todo_id = self._todo_combo.currentData() or 0
+        mark_done = self._todo_done_cb.isChecked()
+        return todo_id, mark_done
 
 
 class AddEntryDialog(QDialog):
@@ -298,6 +343,16 @@ class EntryItem(QFrame):
         tags_lbl = QLabel(tags_str)
         tags_lbl.setStyleSheet("color:#ef5350; font-size:11px;")
 
+        # Associated todo (F7-07: bidirectional linking)
+        todo_title = entry.get("todo_title")
+        if todo_title:
+            todo_lbl = QLabel(f"📋 {todo_title}")
+            todo_lbl.setStyleSheet(
+                "color:#5d4037; font-size:11px; background:#efebe9;"
+                "border-radius:3px; padding:1px 6px;"
+            )
+            todo_lbl.setToolTip(f"关联待办: {todo_title}")
+
         # Edit / Delete buttons (hidden until hover via enterEvent)
         edit_btn = QPushButton("✏")
         edit_btn.setFixedSize(26, 26)
@@ -321,6 +376,8 @@ class EntryItem(QFrame):
         layout.addWidget(time_lbl)
         layout.addWidget(content_lbl)
         layout.addWidget(tags_lbl)
+        if todo_title:
+            layout.addWidget(todo_lbl)
         layout.addWidget(edit_btn)
         layout.addWidget(del_btn)
 
@@ -603,10 +660,25 @@ class MainWindow(QMainWindow):
 
     def _on_edit_entry(self, entry: dict):
         avail_tags = self.config.get("custom_tags", [])
-        dlg = EditEntryDialog(entry, avail_tags, self)
+        engine = getattr(self, '_reminder_engine', None)
+        dlg = EditEntryDialog(entry, avail_tags, self, reminder_engine=engine)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             start, end, content, tags = dlg.get_values()
-            self.db.update_entry(entry["id"], content, tags, start, end)
+            todo_id, mark_done = dlg.get_todo_info()
+            # F7-07: pass todo_id to update_entry
+            self.db.update_entry(entry["id"], content, tags, start, end,
+                                 todo_id=todo_id if todo_id else None)
+            # Update todo linkage if changed
+            if engine:
+                old_todo_id = entry.get("todo_id")
+                if todo_id and todo_id != old_todo_id:
+                    if mark_done:
+                        engine.update_todo(todo_id, pomodoro_id=entry["id"], status="done")
+                    else:
+                        engine.update_todo(todo_id, pomodoro_id=entry["id"])
+                elif not todo_id and old_todo_id:
+                    # Unlink: clear pomodoro_id on the todo side too
+                    engine.update_todo(old_todo_id, pomodoro_id=None)
             self.refresh()
 
     def _on_delete_entry(self, entry_id: int):
@@ -624,7 +696,10 @@ class MainWindow(QMainWindow):
             start, end, content, selected_tags = dlg.get_values()
             todo_id, mark_done = dlg.get_todo_info()
             session_no = self.db.get_next_session_no(target_date)
-            entry_id = self.db.add_entry(target_date, session_no, start, end, content, selected_tags, skipped=False)
+            # F7-07: pass todo_id to add_entry for bidirectional linking
+            entry_id = self.db.add_entry(target_date, session_no, start, end, content,
+                                         selected_tags, skipped=False,
+                                         todo_id=todo_id if todo_id else None)
             if todo_id and entry_id:
                 engine = getattr(self, '_reminder_engine', None)
                 if engine:

@@ -9,9 +9,9 @@ import pytest
 
 def add(db, date="2026-06-02", session_no=1,
         start="09:00:00", end="09:25:00",
-        content="任务内容", tags=None, skipped=False):
+        content="任务内容", tags=None, skipped=False, todo_id=None):
     """快捷添加一条记录，减少重复代码。"""
-    return db.add_entry(date, session_no, start, end, content, tags, skipped)
+    return db.add_entry(date, session_no, start, end, content, tags, skipped, todo_id=todo_id)
 
 
 # ── 正确性测试 ─────────────────────────────────────────────────────────────────
@@ -289,3 +289,127 @@ class TestReminderWithDate:
         tmp_db.update_reminder(rid, remind_date=None)
         r = tmp_db.get_reminder(rid)
         assert r["remind_date"] is None
+
+
+# ── F7-07: 待办-番茄双向关联 ──────────────────────────────────────────────────
+
+
+class TestTodoPomodoroLinking:
+    """F7-07: add_entry / update_entry / get_entries_by_date / get_entry 的 todo_id 双向关联。"""
+
+    # ── add_entry with todo_id ─────────────────────────────────────────────
+
+    def test_add_entry_with_todo_id(self, tmp_db):
+        tid = tmp_db.add_todo("写接口文档", todo_date="2026-06-02")
+        eid = add(tmp_db, content="完成了接口文档", todo_id=tid)
+        entry = tmp_db.get_entries_by_date("2026-06-02")[0]
+        assert entry["todo_id"] == tid
+
+    def test_add_entry_without_todo_id(self, tmp_db):
+        eid = add(tmp_db, content="普通任务")
+        entry = tmp_db.get_entries_by_date("2026-06-02")[0]
+        assert entry["todo_id"] is None
+
+    def test_add_entry_todo_id_defaults_to_none(self, tmp_db):
+        # Existing callers that don't pass todo_id should still work
+        eid = tmp_db.add_entry("2026-06-02", 1, "09:00:00", "09:25:00", "内容")
+        entry = tmp_db.get_entries_by_date("2026-06-02")[0]
+        assert entry["todo_id"] is None
+
+    # ── get_entries_by_date LEFT JOIN todo_title ───────────────────────────
+
+    def test_entries_include_todo_title_when_linked(self, tmp_db):
+        tid = tmp_db.add_todo("写接口文档", todo_date="2026-06-02")
+        add(tmp_db, content="完成了接口文档", todo_id=tid)
+        entry = tmp_db.get_entries_by_date("2026-06-02")[0]
+        assert entry["todo_title"] == "写接口文档"
+
+    def test_entries_todo_title_none_when_not_linked(self, tmp_db):
+        add(tmp_db, content="普通任务")
+        entry = tmp_db.get_entries_by_date("2026-06-02")[0]
+        assert entry["todo_title"] is None
+
+    def test_entries_todo_title_none_when_todo_deleted(self, tmp_db):
+        tid = tmp_db.add_todo("待删除的待办", todo_date="2026-06-02")
+        add(tmp_db, content="关联任务", todo_id=tid)
+        tmp_db.delete_todo(tid)
+        entry = tmp_db.get_entries_by_date("2026-06-02")[0]
+        # ON DELETE SET NULL: todo_id becomes NULL, todo_title becomes None
+        assert entry["todo_title"] is None
+
+    def test_multiple_entries_different_todos(self, tmp_db):
+        tid1 = tmp_db.add_todo("待办A", todo_date="2026-06-02")
+        tid2 = tmp_db.add_todo("待办B", todo_date="2026-06-02")
+        add(tmp_db, session_no=1, content="A任务", todo_id=tid1)
+        add(tmp_db, session_no=2, content="B任务", todo_id=tid2)
+        entries = tmp_db.get_entries_by_date("2026-06-02")
+        assert entries[0]["todo_title"] == "待办A"
+        assert entries[1]["todo_title"] == "待办B"
+
+    # ── update_entry with todo_id ──────────────────────────────────────────
+
+    def test_update_entry_set_todo_id(self, tmp_db):
+        tid = tmp_db.add_todo("新待办", todo_date="2026-06-02")
+        eid = add(tmp_db, content="内容")
+        tmp_db.update_entry(eid, "内容", [], todo_id=tid)
+        entry = tmp_db.get_entries_by_date("2026-06-02")[0]
+        assert entry["todo_id"] == tid
+        assert entry["todo_title"] == "新待办"
+
+    def test_update_entry_clear_todo_id(self, tmp_db):
+        tid = tmp_db.add_todo("待办", todo_date="2026-06-02")
+        eid = add(tmp_db, content="内容", todo_id=tid)
+        tmp_db.update_entry(eid, "内容", [], todo_id=None)
+        entry = tmp_db.get_entries_by_date("2026-06-02")[0]
+        assert entry["todo_id"] is None
+        assert entry["todo_title"] is None
+
+    def test_update_entry_with_time_also_updates_todo_id(self, tmp_db):
+        tid = tmp_db.add_todo("待办", todo_date="2026-06-02")
+        eid = add(tmp_db, content="内容")
+        tmp_db.update_entry(eid, "新内容", [], start_time="10:00:00", end_time="10:25:00", todo_id=tid)
+        entry = tmp_db.get_entries_by_date("2026-06-02")[0]
+        assert entry["content"] == "新内容"
+        assert entry["todo_id"] == tid
+
+    # ── get_entry (single) ─────────────────────────────────────────────────
+
+    def test_get_entry_returns_todo_title(self, tmp_db):
+        tid = tmp_db.add_todo("写接口文档", todo_date="2026-06-02")
+        eid = add(tmp_db, content="完成了接口文档", todo_id=tid)
+        entry = tmp_db.get_entry(eid)
+        assert entry is not None
+        assert entry["todo_id"] == tid
+        assert entry["todo_title"] == "写接口文档"
+
+    def test_get_entry_nonexistent_returns_none(self, tmp_db):
+        assert tmp_db.get_entry(99999) is None
+
+    def test_get_entry_without_todo(self, tmp_db):
+        eid = add(tmp_db, content="普通任务")
+        entry = tmp_db.get_entry(eid)
+        assert entry["todo_id"] is None
+        assert entry["todo_title"] is None
+
+    # ── Backfill migration ─────────────────────────────────────────────────
+
+    def test_backfill_from_todos_pomodoro_id(self, tmp_db):
+        """回填：已有 todos.pomodoro_id 的记录应自动回填到 pomodoro_entries.todo_id。"""
+        from datetime import datetime
+        now = datetime.now().isoformat()
+        # 先不传 todo_id 直接插入一条番茄记录
+        eid = add(tmp_db, content="旧数据")
+        # 在 todo 侧设置 pomodoro_id
+        tid = tmp_db.add_todo("旧待办", todo_date="2026-06-02")
+        tmp_db.update_todo(tid, pomodoro_id=eid)
+        # 模拟重新初始化（触发 _init_db 中的回填 SQL）
+        # 回填 SQL 只更新 todo_id IS NULL 的行，所以需要先确认列已加好
+        # 手动执行回填逻辑
+        with tmp_db._get_conn() as conn:
+            conn.execute(
+                "UPDATE pomodoro_entries SET todo_id = ("
+                "  SELECT t.id FROM todos t WHERE t.pomodoro_id = pomodoro_entries.id LIMIT 1"
+                ") WHERE todo_id IS NULL"
+            )
+        entry = tmp_db.get_entry(eid)
+        assert entry["todo_id"] == tid

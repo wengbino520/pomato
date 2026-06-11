@@ -99,24 +99,43 @@ class Database:
             except Exception:
                 pass
 
+            # Migration (F7-07): add todo_id column for bidirectional todo-pomodoro linking
+            try:
+                conn.execute(
+                    "ALTER TABLE pomodoro_entries ADD COLUMN todo_id INTEGER "
+                    "REFERENCES todos(id) ON DELETE SET NULL"
+                )
+            except Exception:
+                pass
+            # Backfill: set todo_id from todos.pomodoro_id for existing records
+            conn.execute(
+                "UPDATE pomodoro_entries SET todo_id = ("
+                "  SELECT t.id FROM todos t WHERE t.pomodoro_id = pomodoro_entries.id LIMIT 1"
+                ") WHERE todo_id IS NULL"
+            )
+
     def add_entry(self, date_str, session_no, start_time, end_time,
-                  content, tags=None, skipped=False):
+                  content, tags=None, skipped=False, todo_id=None):
         tags_json = json.dumps(tags or [], ensure_ascii=False)
         now = datetime.now().isoformat()
         with self._get_conn() as conn:
             cursor = conn.execute(
                 """INSERT INTO pomodoro_entries
-                   (date, session_no, start_time, end_time, content, tags, skipped, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (date, session_no, start_time, end_time, content, tags, skipped, created_at, todo_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (date_str, session_no, start_time, end_time,
-                 content, tags_json, 1 if skipped else 0, now),
+                 content, tags_json, 1 if skipped else 0, now, todo_id),
             )
             return cursor.lastrowid
 
     def get_entries_by_date(self, date_str):
         with self._get_conn() as conn:
             rows = conn.execute(
-                "SELECT * FROM pomodoro_entries WHERE date=? ORDER BY start_time, end_time",
+                """SELECT e.*, t.title AS todo_title
+                   FROM pomodoro_entries e
+                   LEFT JOIN todos t ON e.todo_id = t.id
+                   WHERE e.date=?
+                   ORDER BY e.start_time, e.end_time""",
                 (date_str,),
             ).fetchall()
         result = []
@@ -126,23 +145,39 @@ class Database:
             result.append(d)
         return result
 
-    def update_entry(self, entry_id, content, tags, start_time=None, end_time=None):
+    def update_entry(self, entry_id, content, tags, start_time=None, end_time=None, todo_id=None):
         tags_json = json.dumps(tags or [], ensure_ascii=False)
         with self._get_conn() as conn:
             if start_time is not None and end_time is not None:
                 conn.execute(
-                    "UPDATE pomodoro_entries SET content=?, tags=?, start_time=?, end_time=? WHERE id=?",
-                    (content, tags_json, start_time, end_time, entry_id),
+                    "UPDATE pomodoro_entries SET content=?, tags=?, start_time=?, end_time=?, todo_id=? WHERE id=?",
+                    (content, tags_json, start_time, end_time, todo_id, entry_id),
                 )
             else:
                 conn.execute(
-                    "UPDATE pomodoro_entries SET content=?, tags=? WHERE id=?",
-                    (content, tags_json, entry_id),
+                    "UPDATE pomodoro_entries SET content=?, tags=?, todo_id=? WHERE id=?",
+                    (content, tags_json, todo_id, entry_id),
                 )
 
     def delete_entry(self, entry_id):
         with self._get_conn() as conn:
             conn.execute("DELETE FROM pomodoro_entries WHERE id=?", (entry_id,))
+
+    def get_entry(self, entry_id):
+        """Get a single pomodoro entry with its associated todo title (F7-07)."""
+        with self._get_conn() as conn:
+            row = conn.execute(
+                """SELECT e.*, t.title AS todo_title
+                   FROM pomodoro_entries e
+                   LEFT JOIN todos t ON e.todo_id = t.id
+                   WHERE e.id=?""",
+                (entry_id,),
+            ).fetchone()
+        if row:
+            d = dict(row)
+            d["tags"] = json.loads(d["tags"])
+            return d
+        return None
 
     def save_report(self, date_str, raw_entries, ai_summary=None, final_report=None):
         raw_json = json.dumps(raw_entries, ensure_ascii=False)
