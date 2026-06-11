@@ -3,7 +3,7 @@ ReminderPopup — 到点提醒强弹窗 (TASK-11)
 
 参考 PopupWindow 的 show_and_focus / _force_foreground 模式。
 """
-import ctypes
+import sys
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
@@ -140,7 +140,11 @@ class ReminderPopup(QDialog):
         self._force_foreground()
 
     def _force_foreground(self):
+        """Best-effort foreground window (Windows only)."""
+        if sys.platform != "win32":
+            return
         try:
+            import ctypes
             hwnd = int(self.winId())
             ctypes.windll.user32.keybd_event(0, 0, 0, 0)
             ctypes.windll.user32.SetForegroundWindow(hwnd)

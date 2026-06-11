@@ -1,4 +1,4 @@
-import ctypes
+import sys
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QKeySequence, QShortcut
@@ -292,8 +292,11 @@ class PopupWindow(QDialog):
         self.text_edit.setFocus()
 
     def _force_foreground(self):
-        """Best-effort Windows foreground window."""
+        """Best-effort foreground window (Windows only)."""
+        if sys.platform != "win32":
+            return
         try:
+            import ctypes
             hwnd = int(self.winId())
             # Simulate a key event so SetForegroundWindow is allowed
             ctypes.windll.user32.keybd_event(0, 0, 0, 0)
