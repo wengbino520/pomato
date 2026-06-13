@@ -14,7 +14,7 @@ POMATO 是一款 Windows/Linux 桌面端番茄工作法 + AI 日报生成工具�
 | 📝 **弹窗记录** | 到点强制置顶弹窗，文字 + 标签输入，Ctrl+Enter 快捷键提交，支持跳过 |
 | 📊 **今日看板** | 当日所有番茄钟时间轴展示，统计已完成数与专注时长，支持编辑/删除/补录 |
 | 🤖 **AI 汇总** | 一键将碎片记录发给大模型，生成按项目分类的结构化日报 |
-| 📋 **日报输出** | AI 日报可编辑，导出 Markdown / 纯文本，一键复制到剪贴板 |
+| 📋 **日报输出** | AI 日报可编辑，导出 Markdown / 纯文本 / Word，一键复制到剪贴板 |
 | 📚 **历史查阅** | 按日期浏览历史日报，支持关键词搜索 |
 | ✅ **待办管理** | 创建/编辑/删除待办事项，支持优先级、截止日期、备注，完成后勾选 |
 | ⏰ **定时提醒** | 自定义提醒时间，到时强弹窗通知，可与待办关联 |
@@ -65,11 +65,11 @@ chmod +x run.sh && ./run.sh
 
 > ⚠️ 如安装了 Anaconda，`run.bat` 会自动隔离 Anaconda 的 DLL 冲突，无需额外处理。
 
-### 开发模式（运行测试）
+### 打包为 .exe（可选）
 
 ```bash
-pip install -r requirements-dev.txt
-pytest
+# 打包为单文件 exe，输出到 dist/ 目录
+build.bat
 ```
 
 ---
@@ -111,7 +111,7 @@ pytest
 
 - 全天碎片记录发送给 AI，按项目分类汇总
 - 实时流式输出（打字机效果），可中途查看
-- **编辑** AI 生成内容后，导出 Markdown 或纯文本
+- **编辑** AI 生成内容后，导出 Markdown / 纯文本 / Word（.docx）
 - **一键复制** 直接粘贴到钉钉 / 飞书 / 企业微信
 - 不满意可点「🔄 重新生成」
 
@@ -169,100 +169,51 @@ pytest
 
 ---
 
-## 项目结构
+## 常见问题
 
-```
-POMATO/
-├── main.py                  # 入口：初始化组件、启动事件循环
-├── run.bat / run.sh         # 启动脚本（DLL 隔离 / 虚拟环境检测）
-├── build.bat                # PyInstaller 打包脚本
-├── requirements.txt         # 生产依赖
-├── requirements-dev.txt     # 开发依赖（pytest）
-├── pytest.ini               # 测试配置
-├── README.md
-├── docs/                    # 需求 & 设计文档
-│   ├── README.md            #   文档索引
-│   ├── requirements.md      #   完整需求分析 & 任务追踪
-│   └── todo-reminder-design.md  # 待办 + 提醒模块设计
-│
-├── src/                     # 四层架构：core → services → ui → app
-│   ├── app.py               # L4 编排层 — 系统托盘管理 + 模块装配
-│   ├── core/                # L1 基础设施层（零依赖，纯工具）
-│   │   ├── config.py        #   配置管理（JSON 持久化、API Key 加密、开机自启）
-│   │   └── database.py      #   SQLite 数据层（条目/日报/待办/提醒 CRUD）
-│   ├── services/            # L2 业务逻辑层（仅依赖 core/）
-│   │   ├── ai_client.py     #   AI 客户端（OpenAI 兼容接口、Prompt 构建、Ollama）
-│   │   ├── holiday_manager.py # 中国节假日识别
-│   │   ├── timer_engine.py  #   计时引擎（状态机：空闲→工作→短休→长休）
-│   │   └── reminder_engine.py # 待办 + 定时提醒引擎
-│   └── ui/                  # L3 表示层（依赖 core/ + services/）
-│       ├── popup_window.py  #   番茄完成弹窗（强制置顶、标签、Ctrl+Enter）
-│       ├── reminder_popup.py #  提醒强弹窗
-│       ├── main_window.py   #   主窗口 · 今日看板
-│       ├── settings_window.py # 设置面板
-│       ├── report_window.py #   日报窗口（AI 流式生成、编辑、导出）
-│       ├── history_window.py #  历史日报窗口
-│       ├── todo_dialog.py   #   待办事项弹窗
-│       ├── reminder_dialog.py # 提醒管理弹窗
-│       ├── todo_list_widget.py # 待办列表组件
-│       └── reminder_list_widget.py # 提醒列表组件
-│
-└── tests/                   # 329 个单元测试
-    ├── conftest.py
-    ├── test_config.py
-    ├── test_database.py     (+ test_database_todos.py / test_database_reminders.py)
-    ├── test_ai_client.py
-    ├── test_holiday_manager.py
-    ├── test_timer_engine.py
-    ├── test_reminder_engine.py
-    ├── test_popup_queue.py
-    ├── test_reminder_popup.py
-    ├── test_main_window.py
-    └── test_report_window.py
-```
+### Anaconda 环境下启动报 DLL 错误？
+
+Anaconda 自带的 `vcruntime140.dll` 版本可能与 PyQt6 不兼容。用 `run.bat` 启动即可自动隔离 Anaconda 路径，或使用纯净的 `.venv` 虚拟环境。
+
+### 数据存在哪里？
+
+所有数据存储在 `C:\Users\<用户名>\.pomato\` 目录下（Linux: `~/.pomato/`），包括：
+- `pomato.db` — SQLite 数据库（番茄记录、待办、提醒）
+- `config.json` — 应用配置
+- `holidays_cache.json` — 节假日缓存
+
+### API Key 安全吗？
+
+Windows 上 API Key 通过 DPAPI 加密存储，只有当前 Windows 用户才能解密。Linux 上使用 XOR 混淆，建议不要在生产服务器上使用。
+
+### 可以离线使用吗？
+
+除 AI 日报生成外，所有功能（计时、记录、待办、提醒）均完全离线。你也可以配置本地 Ollama 模型实现完全离线 AI 日报。
+
+### 如何卸载？
+
+1. 设置中关闭「开机自启动」
+2. 删除安装目录
+3. 删除数据目录 `C:\Users\<用户名>\.pomato\`
 
 ---
 
-## 技术栈
+## 参与贡献
 
-| 层次 | 技术 | 说明 |
-|------|------|------|
-| 框架 | Python + **PyQt6** | 桌面 GUI、系统托盘、弹窗控制 |
-| 数据 | **SQLite** | 本地文件数据库，零配置 |
-| AI | **openai SDK** | 兼容所有 OpenAI 格式 API（含 Ollama） |
-| 托盘 | `QSystemTrayIcon` | 系统托盘图标 + 右键菜单 |
-| 加密 | Windows DPAPI | API Key 非明文存储 |
-| 打包 | PyInstaller（计划中） | 单文件 .exe 分发 |
+欢迎提 Issue 和 PR！
 
----
+- **Bug 报告**：附带重现步骤、期望行为、实际行为
+- **功能请求**：在 Issue 中描述使用场景和期望效果
+- **代码贡献**：请先阅读 `AGENTS.md` 了解代码规范和开发流程
 
-## 依赖
+开发环境搭建：
 
-```
-PyQt6 >= 6.4.0, < 6.8.0
-openai >= 1.0.0
-pywin32 >= 306          (Windows only)
+```bash
+pip install -r requirements-dev.txt
+pytest                    # 确保测试全部通过
 ```
 
----
-
-## 开发进度
-
-| 模块 | 完成度 | 代码位置 |
-|------|--------|----------|
-| 计时引擎 + 节假日 | 100% | `services/timer_engine.py` + `services/holiday_manager.py` |
-| 弹窗记录 | 100% | `ui/popup_window.py` |
-| 今日看板 | 100% | `ui/main_window.py` |
-| AI 汇总 | 100% | `services/ai_client.py` + `ui/report_window.py` |
-| 日报导出（含 Word） | 100% | `ui/report_window.py` |
-| 历史日报 | 100% | `ui/history_window.py` |
-| 配置中心 | 100% | `core/config.py` + `ui/settings_window.py` |
-| 系统托盘 + 装配 | 100% | `app.py` |
-| 待办 + 提醒 | 100% | `services/reminder_engine.py` + `ui/reminder_*.py` + `ui/todo_*.py` |
-
-> 测试覆盖：329 单元测试，全量通过
-
-> 详细任务追踪见 [`docs/requirements.md`](docs/requirements.md)
+> 详细开发指引见 `AGENTS.md`
 
 ---
 

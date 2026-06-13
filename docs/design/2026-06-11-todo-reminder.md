@@ -939,7 +939,7 @@ class MainWindow(QMainWindow):
 | **新增** | `tests/test_reminder_engine.py` | 提醒引擎测试（30+ 用例） |
 | **新增** | `tests/test_reminder_popup.py` | 提醒弹窗测试（10+ 用例） |
 | **新增** | `tests/test_popup_queue.py` | 弹窗队列测试（8+ 用例） |
-| 修改 | `docs/requirements.md` | 更新功能追踪表格 |
+| 修改 | `docs/project-spec.md` | 更新功能追踪表格 |
 
 ### Phase B — 迁入方案二：Tab 标签页
 

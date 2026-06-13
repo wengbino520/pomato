@@ -88,41 +88,13 @@ class EditEntryDialog(QDialog):
         layout.addWidget(QLabel("标签："))
         layout.addWidget(self.tags_combo)
 
-        # ---- F7-07: 关联待办 ----
-        from datetime import date
-        from PyQt6.QtWidgets import QCheckBox
-        self._todo_row = QWidget()
-        todo_row_layout = QHBoxLayout(self._todo_row)
-        todo_row_layout.setContentsMargins(0, 0, 0, 0)
-        todo_row_layout.setSpacing(8)
-
-        todo_label = QLabel("关联待办：")
-        todo_label.setStyleSheet("font-size:12px; color:#666;")
-        self._todo_combo = QComboBox()
-        self._todo_combo.addItem("（不关联）", 0)
-        self._todo_combo.setStyleSheet(
-            "QComboBox { border:1px solid #ddd; border-radius:4px; padding:4px 8px; font-size:12px; }"
-        )
-        self._todo_done_cb = QCheckBox("标记完成")
-        self._todo_done_cb.setStyleSheet("font-size:12px; color:#666;")
-
-        todo_row_layout.addWidget(todo_label)
-        todo_row_layout.addWidget(self._todo_combo, 1)
-        todo_row_layout.addWidget(self._todo_done_cb)
-        layout.addWidget(self._todo_row)
-
+        # ---- 关联待办 (CD-01: extracted TodoLinkWidget) ----
+        from src.ui.todo_link_widget import TodoLinkWidget
         current_todo_id = entry.get("todo_id")
-        if self._reminder_engine:
-            today_str = date.today().isoformat()
-            todos = self._reminder_engine.get_todos(
-                date_str=today_str, include_done=False
-            )
-            for t in todos:
-                self._todo_combo.addItem(t["title"], t["id"])
-                if t["id"] == current_todo_id:
-                    self._todo_combo.setCurrentIndex(self._todo_combo.count() - 1)
-        elif not current_todo_id:
-            self._todo_row.setVisible(False)
+        self._todo_link = TodoLinkWidget(
+            self._reminder_engine, current_todo_id=current_todo_id, parent=self
+        )
+        layout.addWidget(self._todo_link)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save |
@@ -149,13 +121,7 @@ class EditEntryDialog(QDialog):
 
     def get_todo_info(self) -> tuple[int, bool]:
         """返回 (todo_id, 是否标记完成)。0 表示未关联。(F7-07)"""
-        if not self._reminder_engine:
-            return 0, False
-        # NOTE: 不能检查 _todo_row.isVisible()——dlg.exec() 返回后对话框已关闭，
-        #       此时 isVisible() 始终为 False。
-        todo_id = self._todo_combo.currentData() or 0
-        mark_done = self._todo_done_cb.isChecked()
-        return todo_id, mark_done
+        return self._todo_link.get_todo_info()
 
 
 class AddEntryDialog(QDialog):
@@ -219,38 +185,10 @@ class AddEntryDialog(QDialog):
         self.tags_combo.setPlaceholderText("可输入多个标签，逗号分隔")
         layout.addWidget(self.tags_combo)
 
-        # ---- 关联待办 ----
-        from datetime import date
-        from PyQt6.QtWidgets import QCheckBox
-        self._todo_row = QWidget()
-        todo_row_layout = QHBoxLayout(self._todo_row)
-        todo_row_layout.setContentsMargins(0, 0, 0, 0)
-        todo_row_layout.setSpacing(8)
-
-        todo_label = QLabel("关联待办：")
-        todo_label.setStyleSheet("font-size:12px; color:#666;")
-        self._todo_combo = QComboBox()
-        self._todo_combo.addItem("（不关联）", 0)
-        self._todo_combo.setStyleSheet(
-            "QComboBox { border:1px solid #ddd; border-radius:4px; padding:4px 8px; font-size:12px; }"
-        )
-        self._todo_done_cb = QCheckBox("标记完成")
-        self._todo_done_cb.setStyleSheet("font-size:12px; color:#666;")
-
-        todo_row_layout.addWidget(todo_label)
-        todo_row_layout.addWidget(self._todo_combo, 1)
-        todo_row_layout.addWidget(self._todo_done_cb)
-        layout.addWidget(self._todo_row)
-
-        if self._reminder_engine:
-            today_str = date.today().isoformat()
-            todos = self._reminder_engine.get_todos(
-                date_str=today_str, include_done=False
-            )
-            for t in todos:
-                self._todo_combo.addItem(t["title"], t["id"])
-        else:
-            self._todo_row.setVisible(False)
+        # ---- 关联待办 (CD-01: extracted TodoLinkWidget) ----
+        from src.ui.todo_link_widget import TodoLinkWidget
+        self._todo_link = TodoLinkWidget(self._reminder_engine, parent=self)
+        layout.addWidget(self._todo_link)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save |
@@ -282,11 +220,7 @@ class AddEntryDialog(QDialog):
 
     def get_todo_info(self) -> tuple[int, bool]:
         """返回 (todo_id, 是否标记完成)。0 表示未关联。"""
-        if not self._reminder_engine:
-            return 0, False
-        todo_id = self._todo_combo.currentData() or 0
-        mark_done = self._todo_done_cb.isChecked()
-        return todo_id, mark_done
+        return self._todo_link.get_todo_info()
 
 
 class EntryItem(QFrame):

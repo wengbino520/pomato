@@ -33,7 +33,6 @@ class PopupWindow(QDialog):
         self.previous_content = (previous_content or "").strip()
         self.previous_tags = previous_tags or []
         self.selected_tags: list[str] = []
-        self._selected_todo_id = 0
         self.timeout_seconds = max(10, int(self.config.get("popup_timeout_seconds", 180)))
         self._timeout_timer = QTimer(self)
         self._timeout_timer.setSingleShot(True)
@@ -118,40 +117,10 @@ class PopupWindow(QDialog):
         tags_layout.addStretch()
         layout.addWidget(tags_widget)
 
-        # ---- TASK-21: 关联待办 ----
-        from PyQt6.QtWidgets import QCheckBox, QComboBox
-        from datetime import date
-        self._todo_row = QWidget()
-        todo_row_layout = QHBoxLayout(self._todo_row)
-        todo_row_layout.setContentsMargins(0, 0, 0, 0)
-        todo_row_layout.setSpacing(8)
-
-        todo_label = QLabel("关联待办：")
-        todo_label.setStyleSheet("font-size:12px; color:#666;")
-        self._todo_combo = QComboBox()
-        self._todo_combo.addItem("（不关联）", 0)
-        self._todo_combo.setStyleSheet(
-            "QComboBox { border:1px solid #ddd; border-radius:4px; "
-            "padding:4px 8px; font-size:12px; }"
-        )
-        self._todo_done_cb = QCheckBox("标记完成")
-        self._todo_done_cb.setStyleSheet("font-size:12px; color:#666;")
-
-        todo_row_layout.addWidget(todo_label)
-        todo_row_layout.addWidget(self._todo_combo, 1)
-        todo_row_layout.addWidget(self._todo_done_cb)
-        layout.addWidget(self._todo_row)
-
-        # Load todos if engine available
-        if self._reminder_engine:
-            today_str = date.today().isoformat()
-            todos = self._reminder_engine.get_todos(
-                date_str=today_str, include_done=False
-            )
-            for t in todos:
-                self._todo_combo.addItem(t["title"], t["id"])
-        else:
-            self._todo_row.setVisible(False)
+        # ---- 关联待办 (CD-01: extracted TodoLinkWidget) ----
+        from src.ui.todo_link_widget import TodoLinkWidget
+        self._todo_link = TodoLinkWidget(self._reminder_engine, parent=self)
+        layout.addWidget(self._todo_link)
 
         # ── separator ──────────────────────────────────────────────────
         line = QFrame()
@@ -261,8 +230,8 @@ class PopupWindow(QDialog):
             )
             self.text_edit.setFocus()
             return
-        todo_id = self._todo_combo.currentData() or 0
-        if todo_id and self._todo_done_cb.isChecked() and self._reminder_engine:
+        todo_id, mark_done = self._todo_link.get_todo_info()
+        if todo_id and mark_done and self._reminder_engine:
             self._reminder_engine.update_todo(todo_id, status="done")
         logger.info("Popup submitted: session=%d, tags=%s, todo_id=%d", self.session_no, self.selected_tags, todo_id)
         self.submitted.emit(content, list(self.selected_tags), todo_id)
@@ -323,4 +292,4 @@ class PopupWindow(QDialog):
             ctypes.windll.user32.keybd_event(0, 0, 0, 0)
             ctypes.windll.user32.SetForegroundWindow(hwnd)
         except Exception:
-            pass
+            logger.debug("ctypes foreground window failed", exc_info=True)

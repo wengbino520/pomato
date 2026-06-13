@@ -2,7 +2,7 @@
 
 > **版本**: v1.0  
 > **日期**: 2026-06-12  
-> **基于**: 当前代码库分析 + 设计文档 (requirements.md / todo-reminder-design.md)  
+> **基于**: 当前代码库分析 + 项目规格 (project-spec.md) + 设计文档 (design/2026-06-11-todo-reminder.md)  
 > **当前版本**: v2.0（Phase A+B 完成，含待办+提醒）
 
 ---
@@ -445,14 +445,59 @@ def register(plugin_manager):
 
 ## 4. 技术债务清理
 
-| 债务 | 优先级 | 方案 |
-|------|--------|------|
-| 结构化日志 | 🟡 P1 | 引入 `structlog`，JSON 格式，按日轮转 |
-| E2E 测试 | 🟡 P1 | `pytest-qt` 模拟完整工作流 |
-| i18n 国际化 | 🟢 P2 | `gettext`，先英文后日韩 |
-| SQLite WAL 模式 | 🟡 P1 | 一行配置提升并发性能 |
-| CI/CD 自动化构建 | 🟢 P2 | GitHub Actions 多平台矩阵构建 |
-| 数据库自动备份 | 🟡 P1 | 每日首次启动时自动备份到 `~/.pomato/backups/` |
+> 最后更新: 2026-06-14（新增代码级债务 4 项）
+
+### 4.1 功能债务
+
+| # | 债务 | 优先级 | 状态 | 方案 |
+|---|------|--------|------|------|
+| FD-01 | F7-07 待办-番茄双向关联 | 🔴 P0 | ⚠️ 部分实现 | `todo_id` 列/回填已做，需验证 UI 链路完整性 |
+| FD-02 | F10 AI 日报待办注入 | 🟡 P1 | ❌ 未实现 | Prompt 中注入待办完成情况 |
+| FD-03 | 弹窗上一轮上下文 | 🟢 P2 | ❌ 未实现 | `previous_content` 参数已有，UI 链路待完善 |
+
+### 4.2 代码质量债务
+
+| # | 债务 | 优先级 | 文件 | 方案 |
+|---|------|--------|------|------|
+| CD-01 | 关联待办 UI 重复 3 份 | 🟡 P1 | `popup_window.py`, `main_window.py` | 抽取 `TodoLinkWidget` 复用组件 |
+| CD-02 | `_setup_ui()` 过长 (~190行) | 🟢 P2 | `main_window.py:408` | 拆分为 `_build_header()` / `_build_stats_bar()` / `_build_tabs()` / `_build_bottom_bar()` |
+| CD-03 | 内联样式字符串散落 | 🟢 P2 | 多个 UI 文件 | 统一样式常量或主题文件 |
+
+### 4.3 异常处理债务
+
+| # | 债务 | 优先级 | 文件:行号 | 方案 |
+|---|------|--------|-----------|------|
+| EH-01 | 裸 `except Exception: pass` | 🟡 P1 | `popup_window.py:325` | 改为 `logger.debug("ctypes foreground failed", exc_info=True)` |
+| EH-02 | AI 调用 `logger.exception()` + `raise` | 🟢 P2 | `ai_client.py:99` | 确认上层 UI 有适当的用户错误提示 |
+| EH-03 | 迁移 `except Exception` 过于宽泛 | 🟢 P2 | `database.py:90+` | 限定为 `sqlite3.OperationalError` |
+
+### 4.4 基础设施与测试债务
+
+| # | 债务 | 优先级 | 方案 |
+|---|------|--------|------|
+| ID-01 | 结构化日志 | 🟡 P1 | 引入 `structlog`，JSON 格式，按日轮转 |
+| ID-02 | E2E 测试缺失 | 🟡 P1 | `pytest-qt` 模拟完整工作流 |
+| ID-03 | SQLite WAL 模式 | 🟡 P1 | `PRAGMA journal_mode=WAL` 一行配置 |
+| ID-04 | 数据库自动备份 | 🟡 P1 | 每日首次启动时自动备份到 `~/.pomato/backups/` |
+| ID-05 | CI/CD 自动化构建 | 🟢 P2 | GitHub Actions 多平台矩阵构建 |
+| ID-06 | i18n 国际化 | 🟢 P2 | `gettext`，先英文后日韩 |
+| ID-07 | 测试覆盖缺口 | 🟢 P2 | `reminder_engine.on_tick()` 调度逻辑、`ai_client` 流式输出、`holiday_manager` 缓存异常 |
+
+### 4.5 硬编码
+
+| # | 债务 | 优先级 | 文件 | 方案 |
+|---|------|--------|------|------|
+| HC-01 | `print("\a")` 终端响铃 | 🟢 P2 | `app.py:160` | 改用 `logger.debug()` + 系统通知音 |
+| HC-02 | 状态颜色硬编码 | 🟢 P2 | `app.py:117` | 抽取为配置或主题常量 |
+| HC-03 | Ollama 端口写死 11434 | 🟢 P2 | `ai_client.py:57` | 改用 `is_ollama_url()` 工具函数或配置项 |
+
+### 4.6 偿还优先级总结
+
+```
+🔴 P0: FD-01 F7-07 双向关联收尾
+🟡 P1 (本轮): CD-01 重复代码抽取, EH-01 裸except修复, ID-01 结构化日志, ID-03 WAL模式, ID-04 自动备份, ID-02 E2E测试
+🟢 P2 (下轮): CD-02 长函数拆分, CD-03 样式常量, ID-05 CI/CD, ID-06 i18n, FD-02 AI日报增强, FD-03 弹窗上下文
+```
 
 ---
 
