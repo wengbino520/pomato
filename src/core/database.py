@@ -1,6 +1,7 @@
 import sqlite3
 import json
-from datetime import datetime
+import shutil
+from datetime import datetime, date
 from pathlib import Path
 
 from src.services.logger import get_logger
@@ -9,11 +10,14 @@ logger = get_logger(__name__)
 
 
 class Database:
+    _MAX_BACKUPS = 7  # 保留最近 7 天的备份
+
     def __init__(self):
         self.data_dir = Path.home() / ".pomato"
         self.data_dir.mkdir(exist_ok=True)
         self.db_path = self.data_dir / "pomato.db"
         self._init_db()
+        self._backup_db()
         logger.info("Database initialized at %s", self.db_path)
 
     def _get_conn(self):
@@ -21,6 +25,45 @@ class Database:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         return conn
+
+    def _backup_db(self):
+        """每日首次启动时自动备份数据库 (ID-04)。
+
+        规则：
+        - 一天只备份一次（检查最新备份文件的修改日期）
+        - 保留最近 ``_MAX_BACKUPS`` 份备份，删除更旧的
+        - 使用 sqlite3 在线备份 API（安全，不阻塞读写）
+        """
+        backup_dir = self.data_dir / "backups"
+        today_str = date.today().isoformat()
+
+        # 检查今天是否已备份
+        if backup_dir.exists():
+            existing = sorted(backup_dir.glob("pomato_*.db"))
+            if existing:
+                newest_mtime = datetime.fromtimestamp(existing[-1].stat().st_mtime)
+                if newest_mtime.strftime("%Y-%m-%d") == today_str:
+                    logger.debug("Backup already exists for %s, skipping", today_str)
+                    return
+
+        # 执行备份
+        backup_dir.mkdir(exist_ok=True)
+        backup_path = backup_dir / f"pomato_{today_str}.db"
+        try:
+            src = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True)
+            dst = sqlite3.connect(str(backup_path))
+            src.backup(dst)
+            src.close()
+            dst.close()
+            logger.info("Database backup created: %s", backup_path)
+
+            # 清理旧备份
+            all_backups = sorted(backup_dir.glob("pomato_*.db"))
+            for old in all_backups[: -self._MAX_BACKUPS]:
+                old.unlink()
+                logger.debug("Removed old backup: %s", old)
+        except Exception:
+            logger.exception("Failed to create database backup")
 
     def _init_db(self):
         with self._get_conn() as conn:

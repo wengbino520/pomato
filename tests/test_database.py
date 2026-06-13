@@ -536,3 +536,100 @@ class TestTodoPomodoroLinking:
         assert entry["todo_id"] == tid
         assert entry["todo_title"] == "写接口文档"
 
+
+# ── ID-04: 数据库自动备份 ────────────────────────────────────────────────────
+
+
+class TestBackup:
+    """数据库自动备份功能测试 (ID-04)。"""
+
+    def test_backup_creates_file_on_first_init(self, tmp_path):
+        """首次初始化应创建备份文件。"""
+        from pathlib import Path
+        from unittest.mock import patch
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            from src.core.database import Database
+            db = Database()  # __init__ triggers _backup_db()
+            backup_dir = tmp_path / ".pomato" / "backups"
+            backups = list(backup_dir.glob("pomato_*.db"))
+            assert len(backups) == 1, f"应该创建 1 个备份文件，实际有 {len(backups)} 个"
+            assert backups[0].name.startswith("pomato_")
+            assert backups[0].name.endswith(".db")
+
+    def test_backup_skips_when_todays_backup_exists(self, tmp_path):
+        """同一天第二次初始化不应创建重复备份。"""
+        from pathlib import Path
+        from unittest.mock import patch
+        from datetime import date
+
+        today = date.today().isoformat()
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            from src.core.database import Database
+
+            # 首次初始化 — 创建备份
+            Database()
+            backup_dir = tmp_path / ".pomato" / "backups"
+            count1 = len(list(backup_dir.glob("pomato_*.db")))
+            assert count1 == 1
+
+            # 第二次初始化 — 应在同一天跳过备份
+            Database()
+            count2 = len(list(backup_dir.glob("pomato_*.db")))
+            assert count2 == 1, (
+                f"同一天应跳过备份，预期 1 个文件，实际 {count2} 个"
+            )
+
+    def test_backup_cleans_old_backups(self, tmp_path):
+        """超过 _MAX_BACKUPS 份备份时应清理最旧的。"""
+        from pathlib import Path
+        from unittest.mock import patch
+        from datetime import date, timedelta, datetime as dt
+        import os
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            from src.core.database import Database
+
+            backup_dir = tmp_path / ".pomato" / "backups"
+            backup_dir.mkdir(parents=True)
+
+            # 手动创建超过 _MAX_BACKUPS 份的旧备份
+            # 需要设置 mtime 为过去日期，否则 _backup_db 会误判今天已备份
+            for i in range(Database._MAX_BACKUPS + 3):
+                old_date = (date.today() - timedelta(days=10 + i))
+                fake = backup_dir / f"pomato_{old_date.isoformat()}.db"
+                fake.write_bytes(b"")
+                # 设置 mtime 为对应日期（避免被误判为今日备份）
+                ts = dt(old_date.year, old_date.month, old_date.day, 12, 0, 0).timestamp()
+                os.utime(str(fake), (ts, ts))
+
+            db = Database()
+            backups = sorted(backup_dir.glob("pomato_*.db"))
+            assert len(backups) <= Database._MAX_BACKUPS, (
+                f"备份应不超过 {Database._MAX_BACKUPS} 份，实际 {len(backups)} 份"
+            )
+
+    def test_backup_file_is_valid_sqlite(self, tmp_path):
+        """备份文件应是有效的 SQLite 数据库。"""
+        import sqlite3
+        from pathlib import Path
+        from unittest.mock import patch
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            from src.core.database import Database
+
+            db = Database()
+            backup_dir = tmp_path / ".pomato" / "backups"
+            backups = list(backup_dir.glob("pomato_*.db"))
+            assert len(backups) == 1
+
+            # 验证备份可被 sqlite3 打开并包含正确的表
+            conn = sqlite3.connect(str(backups[0]))
+            tables = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+            ).fetchall()
+            table_names = [r[0] for r in tables]
+            assert "pomodoro_entries" in table_names, f"备份应包含 pomodoro_entries 表，实际: {table_names}"
+            conn.close()
+
