@@ -188,6 +188,18 @@ class PopupWindow(QDialog):
         shortcut = QShortcut(QKeySequence("Ctrl+Return"), self)
         shortcut.activated.connect(self._on_submit)
 
+        # US-03: 额外快捷键
+        QShortcut(QKeySequence("Ctrl+S"), self).activated.connect(self._on_submit)
+        QShortcut(QKeySequence("Ctrl+D"), self).activated.connect(self._on_skip)
+        # Ctrl+1~9 切换标签
+        for i in range(1, 10):
+            QShortcut(QKeySequence(f"Ctrl+{i}"), self).activated.connect(
+                self._make_toggle_handler(i)
+            )
+
+        # US-02: 上一轮标签自动预选
+        self._apply_tag_recommendations()
+
         self.text_edit.setFocus()
 
     # ------------------------------------------------------------------
@@ -262,6 +274,29 @@ class PopupWindow(QDialog):
                     if tag not in self.selected_tags:
                         self.selected_tags.append(tag)
                     btn.setStyleSheet(self._tag_style(True))
+
+    # ── US-03 快捷键辅助 ────────────────────────────────────
+
+    def _make_toggle_handler(self, index: int):
+        """Return a callable that toggles the tag at 1-based `index`."""
+        def handler():
+            idx = index - 1
+            if 0 <= idx < len(self._tag_list):
+                tag = self._tag_list[idx]
+                btn = self.tag_buttons[tag]
+                self._toggle_tag(tag, btn)
+        return handler
+
+    # ── US-02 标签预选 ──────────────────────────────────────
+
+    def _apply_tag_recommendations(self):
+        """Auto-select tags from the previous valid entry."""
+        for tag in self.previous_tags:
+            if tag in self.tag_buttons and tag not in self.selected_tags:
+                self.selected_tags.append(tag)
+                self.tag_buttons[tag].setStyleSheet(self._tag_style(True))
+        if self.previous_tags:
+            logger.debug("Auto-selected previous tags: %s", self.previous_tags)
 
     # ------------------------------------------------------------------
     # Public: bring to foreground
