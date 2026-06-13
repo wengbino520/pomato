@@ -56,7 +56,13 @@ class TrayManager(QObject):
         show_action.triggered.connect(self.show_main_window)
 
         report_action = menu.addAction("📋  生成日报")
-        report_action.triggered.connect(self.show_report_window)
+        report_action.triggered.connect(lambda: self.show_report_window(period="daily"))
+
+        weekly_action = menu.addAction("📋  生成周报")
+        weekly_action.triggered.connect(lambda: self.show_report_window(period="weekly"))
+
+        monthly_action = menu.addAction("📋  生成月报")
+        monthly_action.triggered.connect(lambda: self.show_report_window(period="monthly"))
 
         history_action = menu.addAction("📚  历史日报")
         history_action.triggered.connect(self.show_history_window)
@@ -79,6 +85,8 @@ class TrayManager(QObject):
         self.main_window = MainWindow(
             self.config, self.db, self.timer,
             on_generate_report=self.show_report_window,
+            on_generate_weekly_report=lambda d: self.show_report_window(target_date=d, period="weekly"),
+            on_generate_monthly_report=lambda d: self.show_report_window(target_date=d, period="monthly"),
             on_open_settings=self.show_settings,
         )
         # Phase B: 注入 ReminderEngine → 初始化待办/提醒 Tab
@@ -302,20 +310,28 @@ class TrayManager(QObject):
             self.main_window.raise_()
             self.main_window.activateWindow()
 
-    def show_report_window(self, target_date=None):
-        report_date = target_date or date.today().isoformat()
-        logger.info("Opening report window for %s", report_date)
-        entries = self.db.get_entries_by_date(report_date)
+    def show_report_window(self, target_date=None, period="daily"):
+        from src.ui.report_window import _get_period_range
+        dt = date.fromisoformat(target_date) if target_date else date.today()
+        start, end = _get_period_range(dt, period)
+        logger.info("Opening %s report window for %s ~ %s", period, start, end)
+
+        if start == end:
+            entries = self.db.get_entries_by_date(start.isoformat())
+        else:
+            entries = self.db.get_entries_by_date_range(start.isoformat(), end.isoformat())
         valid = [e for e in entries if not e.get("skipped") and e.get("content")]
         if not valid:
-            label = "今日" if report_date == date.today().isoformat() else f"{report_date}"
+            labels = {"daily": "今日", "weekly": "本周", "monthly": "本月"}
+            label = labels.get(period, "该时段")
             QMessageBox.information(
                 None,
                 "POMATO",
                 f"{label}暂无有效记录，请先完成至少一个番茄钟！",
             )
             return
-        win = ReportWindow(self.config, self.db, self.ai_client, report_date=report_date)
+        win = ReportWindow(self.config, self.db, self.ai_client,
+                           report_date=dt.isoformat(), period=period)
         win.exec()
 
     def show_settings(self):

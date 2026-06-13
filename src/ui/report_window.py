@@ -68,19 +68,25 @@ class _AIWorker(QThread):
             self.error.emit(str(exc))
 
 
+PERIOD_NAMES = {"daily": "日报", "weekly": "周报", "monthly": "月报"}
+
+
 class ReportWindow(QDialog):
-    def __init__(self, config, db, ai_client, parent=None, report_date=None):
+    def __init__(self, config, db, ai_client, parent=None, report_date=None,
+                 period: str = "daily"):
         super().__init__(parent)
         self.config = config
         self.db = db
         self.ai_client = ai_client
         self.report_date = report_date or date.today().isoformat()
-        self._period = "daily"
+        self._period = period
         self._dt = date.fromisoformat(self.report_date)
         self._start_date, self._end_date = _get_period_range(self._dt, self._period)
         self.entries = self._load_entries()
         self._worker: _AIWorker | None = None
         self._setup_ui()
+        # 从明确入口打开时隐藏周期下拉框（入口名称即周期）
+        self.period_combo.hide()
         self._start_generation()
 
     # ------------------------------------------------------------------
@@ -88,7 +94,8 @@ class ReportWindow(QDialog):
     # ------------------------------------------------------------------
 
     def _setup_ui(self):
-        self.setWindowTitle("POMATO · 工作日报")
+        period_label = PERIOD_NAMES.get(self._period, "日报")
+        self.setWindowTitle(f"POMATO · 工作{period_label}")
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowStaysOnTopHint)
         self.resize(720, 620)
 

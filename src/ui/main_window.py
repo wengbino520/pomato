@@ -314,12 +314,16 @@ class EntryItem(QFrame):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, config, db, timer, on_generate_report=None, on_open_settings=None):
+    def __init__(self, config, db, timer, on_generate_report=None,
+                 on_generate_weekly_report=None, on_generate_monthly_report=None,
+                 on_open_settings=None):
         super().__init__()
         self.config = config
         self.db = db
         self.timer = timer
         self.on_generate_report = on_generate_report
+        self.on_generate_weekly_report = on_generate_weekly_report
+        self.on_generate_monthly_report = on_generate_monthly_report
         self.on_open_settings = on_open_settings
         self.view_date = date.today()
         self._setup_ui()
@@ -494,9 +498,17 @@ class MainWindow(QMainWindow):
         self.history_btn.setStyleSheet(STYLES["btn_history"])
         self.history_btn.clicked.connect(self._open_history_window)
 
-        report_btn = QPushButton("📋  生成日报")
+        report_btn = QPushButton("📋  日报")
         report_btn.setStyleSheet(STYLES["btn_primary"])
         report_btn.clicked.connect(self._on_generate_report)
+
+        weekly_btn = QPushButton("📋  周报")
+        weekly_btn.setStyleSheet(STYLES["btn_primary"])
+        weekly_btn.clicked.connect(self._on_generate_weekly_report)
+
+        monthly_btn = QPushButton("📋  月报")
+        monthly_btn.setStyleSheet(STYLES["btn_primary"])
+        monthly_btn.clicked.connect(self._on_generate_monthly_report)
 
         settings_btn = QPushButton("⚙  设置")
         settings_btn.setStyleSheet(STYLES["btn_primary"])
@@ -508,6 +520,8 @@ class MainWindow(QMainWindow):
         bl.addStretch()
         bl.addWidget(self.history_btn)
         bl.addWidget(report_btn)
+        bl.addWidget(weekly_btn)
+        bl.addWidget(monthly_btn)
         bl.addWidget(settings_btn)
         return bottom
 
@@ -601,6 +615,14 @@ class MainWindow(QMainWindow):
     def _on_generate_report(self):
         if self.on_generate_report:
             self.on_generate_report(self.view_date.isoformat())
+
+    def _on_generate_weekly_report(self):
+        if self.on_generate_weekly_report:
+            self.on_generate_weekly_report(self.view_date.isoformat())
+
+    def _on_generate_monthly_report(self):
+        if self.on_generate_monthly_report:
+            self.on_generate_monthly_report(self.view_date.isoformat())
 
     def _on_pause_resume(self):
         self.timer.pause_resume()
