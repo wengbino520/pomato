@@ -253,14 +253,16 @@ class ReportWindow(QDialog):
         self.copy_btn.setEnabled(True)
         self.export_btn.setEnabled(True)
         self.export_docx_btn.setEnabled(True)
-        # Only auto-save daily reports (weekly/monthly have different key semantics)
-        if self._period == "daily":
-            try:
-                self.db.save_report(self.report_date, self.entries,
-                                    ai_summary=result, final_report=result)
-                logger.info("Report saved for %s (%d chars)", self.report_date, len(result))
-            except Exception:
-                logger.exception("Failed to save report for %s", self.report_date)
+        # Always save (all periods persisted)
+        try:
+            self.db.save_report(self._start_date.isoformat(), self.entries,
+                                period=self._period,
+                                ai_summary=result, final_report=result)
+            logger.info("%s report saved for %s (%d chars)",
+                        self._period, self._start_date, len(result))
+        except Exception:
+            logger.exception("Failed to save %s report for %s",
+                           self._period, self._start_date)
 
     def _on_error(self, error_msg: str):
         self.progress.hide()
@@ -319,7 +321,8 @@ class ReportWindow(QDialog):
                 text = self._markdown_to_plain_text(markdown)
             with open(path, "w", encoding="utf-8") as f:
                 f.write(text)
-            self.db.save_report(self.report_date, self.entries, final_report=markdown)
+            self.db.save_report(self._start_date.isoformat(), self.entries,
+                                period=self._period, final_report=markdown)
             QMessageBox.information(self, "导出成功", f"日报已保存至：\n{path}")
 
     @staticmethod
@@ -411,7 +414,8 @@ class ReportWindow(QDialog):
                 self._add_markdown_inline(p, stripped)
 
         doc.save(path)
-        self.db.save_report(self.report_date, self.entries, final_report=markdown)
+        self.db.save_report(self._start_date.isoformat(), self.entries,
+                            period=self._period, final_report=markdown)
         QMessageBox.information(self, "导出成功", f"日报已保存至：\n{path}")
 
     @staticmethod

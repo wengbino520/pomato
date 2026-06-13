@@ -176,13 +176,39 @@ class TestReports:
         assert report["final_report"] == "# 日报"
         assert report["raw_entries"] == entries
 
-    def test_save_report_upsert_overwrites_same_date(self, tmp_db):
-        """相同日期再次 save 时覆盖旧值，不新增行。"""
-        tmp_db.save_report("2026-06-02", [], ai_summary="v1")
-        tmp_db.save_report("2026-06-02", [], ai_summary="v2")
-        report = tmp_db.get_report("2026-06-02")
+    def test_save_report_upsert_overwrites_same_date_and_period(self, tmp_db):
+        """相同日期 + 相同 period 再次 save 时覆盖旧值，不新增行。"""
+        tmp_db.save_report("2026-06-02", [], period="daily", ai_summary="v1")
+        tmp_db.save_report("2026-06-02", [], period="daily", ai_summary="v2")
+        report = tmp_db.get_report("2026-06-02", period="daily")
         assert report["ai_summary"] == "v2"
         assert len(tmp_db.get_all_report_dates()) == 1
+
+    def test_save_report_same_date_different_period_no_conflict(self, tmp_db):
+        """同一日期，日报/周报/月报三条记录共存。"""
+        tmp_db.save_report("2026-06-02", [], period="daily", ai_summary="日报")
+        tmp_db.save_report("2026-06-02", [], period="weekly", ai_summary="周报")
+        tmp_db.save_report("2026-06-02", [], period="monthly", ai_summary="月报")
+        assert tmp_db.get_report("2026-06-02", period="daily")["ai_summary"] == "日报"
+        assert tmp_db.get_report("2026-06-02", period="weekly")["ai_summary"] == "周报"
+        assert tmp_db.get_report("2026-06-02", period="monthly")["ai_summary"] == "月报"
+        # get_all_report_dates 去重，同一天只出现一次
+        assert tmp_db.get_all_report_dates() == ["2026-06-02"]
+        # get_all_reports 返回三条
+        all_reports = tmp_db.get_all_reports()
+        assert len(all_reports) == 3
+        periods = {r["period"] for r in all_reports}
+        assert periods == {"daily", "weekly", "monthly"}
+
+    def test_get_report_without_period_defaults_to_daily(self, tmp_db):
+        tmp_db.save_report("2026-06-02", [], period="daily", ai_summary="日报")
+        # get_report with no period arg defaults to "daily"
+        report = tmp_db.get_report("2026-06-02")
+        assert report["ai_summary"] == "日报"
+
+    def test_get_report_wrong_period_returns_none(self, tmp_db):
+        tmp_db.save_report("2026-06-02", [], period="daily", ai_summary="日报")
+        assert tmp_db.get_report("2026-06-02", period="weekly") is None
 
     def test_get_report_nonexistent_returns_none(self, tmp_db):
         assert tmp_db.get_report("1999-01-01") is None

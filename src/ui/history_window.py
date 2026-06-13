@@ -2,6 +2,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QColor, QTextCursor
 from PyQt6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QHBoxLayout,
     QLabel,
@@ -57,10 +58,10 @@ class HistoryWindow(QDialog):
         self.db = db
         self.ai_client = ai_client
         self.config = config or {}
-        self._report_by_date: dict[str, dict] = {}
-        self._has_report: dict[str, bool] = {}   # True=有日报, False=仅有番茄钟记录
+        self._reports: list[dict] = []           # all reports (dict with date, period, ...)
         self._worker: _HistoryAIWorker | None = None
         self._current_date: str = ""
+        self._current_period: str = "daily"
         self._initial_date = initial_date
         self.setWindowTitle("POMATO · 历史日报")
         self.setWindowFlags(Qt.WindowType.Window)
@@ -85,10 +86,18 @@ class HistoryWindow(QDialog):
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("搜索日期或内容…")
         self.search_input.setStyleSheet(
-            "QLineEdit{background:white;color:#333;border:none;border-radius:4px;padding:6px 10px;min-width:220px;}"
+            "QLineEdit{background:white;color:#333;border:none;border-radius:4px;padding:6px 10px;min-width:180px;}"
         )
         self.search_input.textChanged.connect(self._load_dates)
         hl.addWidget(self.search_input)
+        self.period_filter = QComboBox()
+        self.period_filter.addItems(["全部", "日报", "周报", "月报"])
+        self.period_filter.setStyleSheet(
+            "QComboBox{background:white;color:#333;border:none;border-radius:4px;padding:4px 8px;}"
+            "QComboBox::drop-down{border:none;}"
+        )
+        self.period_filter.currentIndexChanged.connect(self._load_dates)
+        hl.addWidget(self.period_filter)
         layout.addWidget(header)
 
         # ── splitter ───────────────────────────────────────────────────
@@ -165,30 +174,51 @@ class HistoryWindow(QDialog):
         splitter.setSizes([200, 560])
         layout.addWidget(splitter, 1)
 
+    PERIOD_LABELS = {"daily": "日报", "weekly": "周报", "monthly": "月报"}
+    PERIOD_EMOJIS = {"daily": "📅", "weekly": "📊", "monthly": "📈"}
+
     def _load_dates(self):
         self.date_list.clear()
-        self._report_by_date = {}
-        self._has_report = {}
+        self._reports = []
 
         keyword = self.search_input.text().strip().lower()
+        period_filter = self.period_filter.currentText()
+        # Map filter text to period value
+        filter_period: str | None = None
+        if period_filter == "日报":
+            filter_period = "daily"
+        elif period_filter == "周报":
+            filter_period = "weekly"
+        elif period_filter == "月报":
+            filter_period = "monthly"
 
-        # ---- 收集日期 ----
-        report_dates = set(self.db.get_all_report_dates())
-        entry_dates = set(self.db.get_all_entry_dates())
+        # Collect reports (with period info)
+        all_reports = self.db.get_all_reports()
+        if filter_period:
+            all_reports = [r for r in all_reports if r["period"] == filter_period]
 
         if keyword:
-            # 搜索时：日报表匹配关键词 + 番茄钟记录日期匹配关键词
-            report_dates = {
-                d for d in report_dates
-                if keyword in d.lower()
-                or any(keyword in (r.get("final_report") or "") + (r.get("ai_summary") or "")
-                       for r in [self.db.get_report(d)] if r)
-            }
+            all_reports = [
+                r for r in all_reports
+                if keyword in r["date"].lower()
+                or keyword in (r.get("final_report") or "").lower()
+                or keyword in (r.get("ai_summary") or "").lower()
+            ]
+
+        self._reports = all_reports
+
+        # Also get dates with entries but no report
+        report_dates = {r["date"] for r in all_reports}
+        entry_dates = set(self.db.get_all_entry_dates())
+        if keyword:
             entry_dates = {d for d in entry_dates if keyword in d.lower()}
+        # Only show entry-only dates when no period filter (or filter is daily, since entries are daily)
+        if filter_period is None or filter_period == "daily":
+            entry_only_dates = sorted(entry_dates - report_dates, reverse=True)
+        else:
+            entry_only_dates = []
 
-        all_dates = sorted(report_dates | entry_dates, reverse=True)
-
-        if not all_dates:
+        if not all_reports and not entry_only_dates:
             item = QListWidgetItem("（暂无记录）")
             item.setFlags(Qt.ItemFlag.NoItemFlags)
             self.date_list.addItem(item)
@@ -196,59 +226,71 @@ class HistoryWindow(QDialog):
             self.preview.setPlainText("")
             return
 
-        for d in all_dates:
-            has_report = d in report_dates
-            self._has_report[d] = has_report
-            # 加载已有日报内容
-            if has_report:
-                self._report_by_date[d] = self.db.get_report(d)
-            # 列表项：无日报的加 ⚠ 标记
-            label = d if has_report else f"⚠ {d}"
-            item = QListWidgetItem(label)
-            if not has_report:
-                item.setForeground(QColor("gray"))
+        # Show reports first (with period badges), then entry-only dates
+        for r in all_reports:
+            emoji = self.PERIOD_EMOJIS.get(r["period"], "📄")
+            label = r["period"]
+            period_label = self.PERIOD_LABELS.get(r.get("period", "daily"), "日报")
+            display = f"{emoji}  {r['date']}  · {period_label}"
+            item = QListWidgetItem(display)
+            item.setData(Qt.ItemDataRole.UserRole, (r["date"], r["period"]))
             self.date_list.addItem(item)
-        # ---- 预选初始日期 ----
+
+        for d in entry_only_dates:
+            item = QListWidgetItem(f"⚠ {d}")
+            item.setForeground(QColor("gray"))
+            item.setData(Qt.ItemDataRole.UserRole, (d, None))
+            self.date_list.addItem(item)
+
+        # Pre-select initial date
         found = False
         if self._initial_date:
             for i in range(self.date_list.count()):
-                item = self.date_list.item(i)
-                if item and item.text().replace("⚠ ", "") == self._initial_date:
+                data = self.date_list.item(i).data(Qt.ItemDataRole.UserRole)
+                if data and data[0] == self._initial_date:
                     self.date_list.setCurrentRow(i)
                     found = True
                     break
-            self._initial_date = None  # 只在首次加载时生效
+            self._initial_date = None
         if not found:
             self.date_list.setCurrentRow(0)
 
     def _on_date_selected(self, current: QListWidgetItem, _prev):
         if current is None:
             return
-        # 去掉 ⚠ 前缀还原真实日期
-        date_str = current.text().replace("⚠ ", "")
+        data = current.data(Qt.ItemDataRole.UserRole)
+        if not data:
+            return
+        date_str, period = data
         self._current_date = date_str
-        has_report = self._has_report.get(date_str, False)
-        report = self._report_by_date.get(date_str)
-        if has_report and report is None:
-            report = self.db.get_report(date_str)
+        self._current_period = period or "daily"
 
-        # 检查是否有番茄钟记录
+        # Try to get the report (with period if we have one)
+        has_report = period is not None
+        report = None
+        if has_report:
+            # Find matching report in loaded reports
+            for r in self._reports:
+                if r["date"] == date_str and r["period"] == period:
+                    report = r
+                    break
+
+        # Check for pomodoro entries
         entries = self.db.get_entries_by_date(date_str)
         valid_entries = [e for e in entries if not e.get("skipped") and e.get("content")]
         has_entries = len(valid_entries) > 0
 
-        # AI 按钮：有 AI client 且有有效记录才启用
+        # AI button state
         can_ai = self.ai_client is not None and has_entries
         self.ai_summary_btn.setEnabled(can_ai)
-        # 有日报 → "AI 总结"；无日报 → "生成日报"
+        period_label = self.PERIOD_LABELS.get(period or "daily", "日报")
         if has_report:
             self.ai_summary_btn.setText("🤖 AI 总结")
         else:
             self.ai_summary_btn.setText("🤖 生成日报")
 
         if has_report and report:
-            # ---- 有日报：直接展示 ----
-            self.preview_title.setText(f"📄  {date_str}")
+            self.preview_title.setText(f"📄  {date_str} · {period_label}")
             content = report.get("final_report") or report.get("ai_summary") or ""
             if not content:
                 lines = [f"- {e.get('start_time','')[:5]}-{e.get('end_time','')[:5]}  {e.get('content','')}"
@@ -257,7 +299,6 @@ class HistoryWindow(QDialog):
                 content = "\n".join(lines) or "（无内容）"
             self.preview.setPlainText(content)
         elif has_entries:
-            # ---- 无日报但有番茄钟记录：展示原始记录 + 提示 ----
             self.preview_title.setText(f"📋  {date_str} · 未生成日报")
             lines = [f"## {date_str} 番茄钟记录", ""]
             completed = [e for e in entries if not e.get("skipped")]
@@ -275,7 +316,6 @@ class HistoryWindow(QDialog):
             lines.append("💡 该日期尚未生成日报，点击 **🤖 生成日报** 按钮即可生成。")
             self.preview.setPlainText("\n".join(lines))
         else:
-            # ---- 无日报也无有效记录 ----
             self.preview_title.setText(f"📋  {date_str} · 无记录")
             self.preview.setPlainText("该日期没有有效番茄钟记录。")
 
@@ -327,17 +367,17 @@ class HistoryWindow(QDialog):
         self.progress.hide()
         self.ai_summary_btn.setText("🤖 AI 总结")
         self.ai_summary_btn.setEnabled(True)
-        self.preview_title.setText(f"📄  {self._current_date} · AI 总结")
-        # Save the AI summary to the database
+        self.preview_title.setText(f"📄  {self._current_date} · 日报 · AI 总结")
+        # Save the AI summary to the database (history AI always generates daily)
         self.db.save_report(self._current_date,
                             self.db.get_entries_by_date(self._current_date),
-                            ai_summary=result, final_report=result)
+                            period="daily", ai_summary=result, final_report=result)
         # Refresh: 新生成的日报会去掉 ⚠ 标记
         self._load_dates()
         # 重新选中当前日期
         for i in range(self.date_list.count()):
-            item = self.date_list.item(i)
-            if item and item.text().replace("⚠ ", "") == self._current_date:
+            data = self.date_list.item(i).data(Qt.ItemDataRole.UserRole)
+            if data and data[0] == self._current_date:
                 self.date_list.setCurrentRow(i)
                 break
 

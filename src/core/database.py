@@ -82,12 +82,14 @@ class Database:
 
                 CREATE TABLE IF NOT EXISTS daily_reports (
                     id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                    date         TEXT UNIQUE NOT NULL,
+                    date         TEXT NOT NULL,
+                    period       TEXT NOT NULL DEFAULT 'daily',
                     raw_entries  TEXT NOT NULL,
                     ai_summary   TEXT,
                     final_report TEXT,
                     exported_at  TEXT,
-                    created_at   TEXT NOT NULL
+                    created_at   TEXT NOT NULL,
+                    UNIQUE(date, period)
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_entries_date
@@ -162,6 +164,35 @@ class Database:
                 "  SELECT t.id FROM todos t WHERE t.pomodoro_id = pomodoro_entries.id LIMIT 1"
                 ") WHERE todo_id IS NULL"
             )
+
+            # Migration (D2-B): add period column + change UNIQUE constraint
+            try:
+                conn.execute("SELECT period FROM daily_reports LIMIT 1")
+            except sqlite3.OperationalError:
+                logger.info("Migration: adding period column to daily_reports")
+                conn.executescript("""
+                    ALTER TABLE daily_reports ADD COLUMN period TEXT NOT NULL DEFAULT 'daily';
+
+                    CREATE TABLE daily_reports_new (
+                        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                        date         TEXT NOT NULL,
+                        period       TEXT NOT NULL DEFAULT 'daily',
+                        raw_entries  TEXT NOT NULL,
+                        ai_summary   TEXT,
+                        final_report TEXT,
+                        exported_at  TEXT,
+                        created_at   TEXT NOT NULL,
+                        UNIQUE(date, period)
+                    );
+
+                    INSERT INTO daily_reports_new
+                        SELECT id, date, period, raw_entries,
+                               ai_summary, final_report, exported_at, created_at
+                        FROM daily_reports;
+
+                    DROP TABLE daily_reports;
+                    ALTER TABLE daily_reports_new RENAME TO daily_reports;
+                """)
 
     def add_entry(self, date_str, session_no, start_time, end_time,
                   content, tags=None, skipped=False, todo_id=None):
@@ -262,25 +293,27 @@ class Database:
             ).fetchall()
         return [(r["date"], r["cnt"]) for r in rows]
 
-    def save_report(self, date_str, raw_entries, ai_summary=None, final_report=None):
+    def save_report(self, date_str, raw_entries, period="daily",
+                    ai_summary=None, final_report=None):
         raw_json = json.dumps(raw_entries, ensure_ascii=False)
         now = datetime.now().isoformat()
         with self._get_conn() as conn:
             conn.execute(
                 """INSERT INTO daily_reports
-                       (date, raw_entries, ai_summary, final_report, created_at)
-                   VALUES (?, ?, ?, ?, ?)
-                   ON CONFLICT(date) DO UPDATE SET
+                       (date, period, raw_entries, ai_summary, final_report, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(date, period) DO UPDATE SET
                        raw_entries=excluded.raw_entries,
                        ai_summary=excluded.ai_summary,
                        final_report=excluded.final_report""",
-                (date_str, raw_json, ai_summary, final_report, now),
+                (date_str, period, raw_json, ai_summary, final_report, now),
             )
 
-    def get_report(self, date_str):
+    def get_report(self, date_str, period="daily"):
         with self._get_conn() as conn:
             row = conn.execute(
-                "SELECT * FROM daily_reports WHERE date=?", (date_str,)
+                "SELECT * FROM daily_reports WHERE date=? AND period=?",
+                (date_str, period),
             ).fetchone()
         if row:
             d = dict(row)
@@ -289,11 +322,25 @@ class Database:
         return None
 
     def get_all_report_dates(self):
+        """Return distinct dates that have at least one report (any period)."""
         with self._get_conn() as conn:
             rows = conn.execute(
-                "SELECT date FROM daily_reports ORDER BY date DESC"
+                "SELECT DISTINCT date FROM daily_reports ORDER BY date DESC"
             ).fetchall()
         return [row["date"] for row in rows]
+
+    def get_all_reports(self):
+        """Return all reports as (date, period, report) tuples, newest first."""
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM daily_reports ORDER BY date DESC, period"
+            ).fetchall()
+        result = []
+        for row in rows:
+            d = dict(row)
+            d["raw_entries"] = json.loads(d["raw_entries"])
+            result.append(d)
+        return result
 
     def get_all_entry_dates(self):
         """返回所有有番茄钟记录的日期（用于历史窗口展示无日报但有记录的日期）。"""
@@ -344,8 +391,7 @@ class Database:
     def search_reports(self, keyword: str):
         kw = (keyword or "").strip()
         if not kw:
-            dates = self.get_all_report_dates()
-            return [self.get_report(d) for d in dates if self.get_report(d)]
+            return self.get_all_reports()
 
         like_pattern = f"%{kw}%"
         with self._get_conn() as conn:
