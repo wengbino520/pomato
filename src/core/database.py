@@ -347,20 +347,47 @@ class Database:
             return cursor.lastrowid
 
     def get_todos(self, date_str=None, include_done=True):
+        """Get todos filtered by date.
+
+        Today's view (date_str == today) includes all pending/in-progress
+        todos from earlier dates, so uncompleted todos accumulate naturally
+        without needing carry-over copies.
+        """
+        from datetime import date as dt_date
+        today_str = dt_date.today().isoformat()
+
         with self._get_conn() as conn:
             if date_str:
+                is_today = (date_str == today_str)
                 if include_done:
-                    rows = conn.execute(
-                        """SELECT * FROM todos WHERE todo_date=?
-                           ORDER BY priority DESC, sort_order ASC""",
-                        (date_str,),
-                    ).fetchall()
+                    if is_today:
+                        rows = conn.execute(
+                            """SELECT * FROM todos
+                               WHERE todo_date = ?
+                                  OR (todo_date < ? AND status != 'done')
+                               ORDER BY priority DESC, sort_order ASC""",
+                            (date_str, date_str),
+                        ).fetchall()
+                    else:
+                        rows = conn.execute(
+                            """SELECT * FROM todos WHERE todo_date=?
+                               ORDER BY priority DESC, sort_order ASC""",
+                            (date_str,),
+                        ).fetchall()
                 else:
-                    rows = conn.execute(
-                        """SELECT * FROM todos WHERE todo_date=? AND status != 'done'
-                           ORDER BY priority DESC, sort_order ASC""",
-                        (date_str,),
-                    ).fetchall()
+                    if is_today:
+                        rows = conn.execute(
+                            """SELECT * FROM todos
+                               WHERE status != 'done' AND todo_date <= ?
+                               ORDER BY priority DESC, sort_order ASC""",
+                            (date_str,),
+                        ).fetchall()
+                    else:
+                        rows = conn.execute(
+                            """SELECT * FROM todos WHERE todo_date=? AND status != 'done'
+                               ORDER BY priority DESC, sort_order ASC""",
+                            (date_str,),
+                        ).fetchall()
             else:
                 if include_done:
                     rows = conn.execute(
