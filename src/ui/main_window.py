@@ -494,7 +494,7 @@ class MainWindow(QMainWindow):
         self.pause_btn.clicked.connect(self._on_pause_resume)
         self.pause_btn.setEnabled(False)
 
-        self.history_btn = QPushButton("📚  历史日报")
+        self.history_btn = QPushButton("📚  历史报告")
         self.history_btn.setStyleSheet(STYLES["btn_history"])
         self.history_btn.clicked.connect(self._open_history_window)
 

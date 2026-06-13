@@ -11,7 +11,7 @@ class TestHistoryWindowInit:
 
     def test_window_created_with_title(self, tmp_db, qapp):
         win = HistoryWindow(tmp_db)
-        assert win.windowTitle() == "POMATO · 历史日报"
+        assert win.windowTitle() == "POMATO · 历史报告"
         win.close()
 
     def test_period_filter_combo_exists(self, tmp_db, qapp):

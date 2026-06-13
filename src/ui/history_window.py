@@ -63,7 +63,7 @@ class HistoryWindow(QDialog):
         self._current_date: str = ""
         self._current_period: str = "daily"
         self._initial_date = initial_date
-        self.setWindowTitle("POMATO · 历史日报")
+        self.setWindowTitle("POMATO · 历史报告")
         self.setWindowFlags(Qt.WindowType.Window)
         self.resize(760, 520)
         self._setup_ui()
@@ -79,7 +79,7 @@ class HistoryWindow(QDialog):
         header.setFixedHeight(48)
         hl = QHBoxLayout(header)
         hl.setContentsMargins(16, 8, 16, 8)
-        title = QLabel("📚  历史日报")
+        title = QLabel("📚  历史报告")
         title.setStyleSheet("color:white; font-size:16px; font-weight:bold;")
         hl.addWidget(title)
         hl.addStretch()
@@ -107,7 +107,7 @@ class HistoryWindow(QDialog):
         left = QWidget()
         ll = QVBoxLayout(left)
         ll.setContentsMargins(8, 8, 4, 8)
-        ll.addWidget(QLabel("日报列表"))
+        ll.addWidget(QLabel("报告列表"))
 
         self.date_list = QListWidget()
         self.date_list.setStyleSheet(

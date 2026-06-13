@@ -64,7 +64,7 @@ class TrayManager(QObject):
         monthly_action = menu.addAction("📋  生成月报")
         monthly_action.triggered.connect(lambda: self.show_report_window(period="monthly"))
 
-        history_action = menu.addAction("📚  历史日报")
+        history_action = menu.addAction("📚  历史报告")
         history_action.triggered.connect(self.show_history_window)
 
         menu.addSeparator()
