@@ -37,6 +37,29 @@
 
 ---
 
+---
+
+## 真实示例
+
+以下是一个完整的 TASK 示例（来自本项目 F7-07 待办-番茄双向关联）：
+
+```markdown
+### TASK-03: database.py — add_entry() 增加 todo_id 参数
+- **状态**: ✅ 已完成
+- **依赖**: TASK-01 (ALTER TABLE 迁移)
+- **文件**: `src/core/database.py`, `tests/test_database.py`
+- **操作**:
+  1. `add_entry()` 签名新增 `todo_id=None`
+  2. INSERT 语句加入 `todo_id` 字段
+  3. `get_entries_by_date()` LEFT JOIN todos 带回 `todo_title`
+- **验证**:
+  - `test_add_entry_with_todo_id` — 传入 todo_id 后查询可关联回 todo
+  - `test_add_entry_without_todo_id` — 不传时 todo_id 为 NULL 不崩溃
+- **预计**: 30 分钟
+```
+
+---
+
 ## 关键约定
 
 | 约定 | 说明 |

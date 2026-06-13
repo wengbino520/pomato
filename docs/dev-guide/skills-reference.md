@@ -6,6 +6,8 @@
 
 ## ① 方案设计（需求分析师）
 
+> 💡 **推荐使用顺序**：先 `interview-me` 或 `idea-refine` 收敛需求 → 再 `spec-driven-development` 产出规格 → 如需多模块改动则 `architecture-blueprint-generator` 分析架构 → `planning-and-task-breakdown` 拆任务。接口设计类用 `api-and-interface-design`，重大决策用 `documentation-and-adrs` 记录。
+
 | Skill | 用途 | 适用场景 |
 |-------|------|----------|
 | `spec-driven-development` | 从零产出结构化需求规格 | 需求模糊、只有一句话描述时先用此 skill 收敛 |
@@ -23,6 +25,8 @@
 | `doubt-driven-development` | 对方案做对抗性审查 | 高风险改动（数据迁移、加密、多线程），在评审时模拟"找茬" |
 
 ## ③ 开发与测试（开发 + 测试）
+
+> 💡 **推荐使用顺序**：默认用 `test-driven-development`（红→绿→重构）编码 → 多文件改动时叠加 `incremental-implementation` 分批提交 → 遇第三方 API 用 `source-driven-development` 查文档 → UI 类用 `frontend-ui-engineering` → 出 bug 用 `debugging-and-error-recovery` → 完成后用 `code-simplification` 清理。安全/日志/性能为按需补充 Skill。
 
 | Skill | 用途 | 适用场景 |
 |-------|------|----------|
