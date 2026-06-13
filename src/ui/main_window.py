@@ -28,6 +28,7 @@ from src.ui.styles import COLORS, STYLES, btn_style
 from src.ui.history_window import HistoryWindow
 from src.ui.todo_list_widget import TodoListWidget
 from src.ui.reminder_list_widget import ReminderListWidget
+from src.ui.stats_widget import StatsWidget
 
 logger = get_logger(__name__)
 
@@ -473,6 +474,9 @@ class MainWindow(QMainWindow):
         self._reminder_tab_layout.setContentsMargins(0, 0, 0, 0)
         self.tab_widget.addTab(self._reminder_tab, "⏰ 提醒")
 
+        self._stats_widget = StatsWidget(self.db)
+        self.tab_widget.addTab(self._stats_widget, "📊 统计")
+
         return self.tab_widget
 
     def _build_bottom_bar(self) -> QWidget:
@@ -566,6 +570,9 @@ class MainWindow(QMainWindow):
             self._todo_widget.refresh(date_str=date_str)
         if hasattr(self, '_reminder_widget'):
             self._reminder_widget.refresh()
+
+        # 刷新统计 Tab (C3)
+        self._stats_widget.refresh(date_str)
 
     # ------------------------------------------------------------------
     # Slots
