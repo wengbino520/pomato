@@ -10,6 +10,10 @@ from datetime import datetime, date
 from enum import Enum
 from PyQt6.QtCore import QObject, pyqtSignal
 
+from src.services.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class TodoStatus(str, Enum):
     PENDING = "pending"
@@ -50,6 +54,7 @@ class ReminderEngine(QObject):
             r["id"] for r in self._reminders
             if r.get("last_triggered") == today
         }
+        logger.debug("Reminders reloaded: %d enabled, %d triggered today", len(self._reminders), len(self._triggered_today))
 
     def add_reminder(self, title, remind_time, remind_date=None,
                      repeat_type="none", repeat_days="", snooze_min=10):
@@ -171,6 +176,7 @@ class ReminderEngine(QObject):
                     continue
 
             # 触发！
+            logger.info("Reminder triggered: id=%d title=%s", r["id"], r["title"])
             self.db.mark_reminder_triggered(r["id"], today_str)
             self._triggered_today.add(r["id"])
             self.reminder_triggered.emit(r["id"], r["title"], r["remind_time"])

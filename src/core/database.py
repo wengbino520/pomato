@@ -3,6 +3,10 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+from src.services.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class Database:
     def __init__(self):
@@ -10,6 +14,7 @@ class Database:
         self.data_dir.mkdir(exist_ok=True)
         self.db_path = self.data_dir / "pomato.db"
         self._init_db()
+        logger.info("Database initialized at %s", self.db_path)
 
     def _get_conn(self):
         conn = sqlite3.connect(self.db_path)
@@ -83,7 +88,7 @@ class Database:
             try:
                 conn.execute("ALTER TABLE todos ADD COLUMN todo_date TEXT")
             except Exception:
-                pass
+                logger.debug("Migration: todo_date column already exists")
             # Backfill: set todo_date from created_at date for existing rows
             conn.execute(
                 "UPDATE todos SET todo_date = substr(created_at, 1, 10) WHERE todo_date IS NULL"
@@ -91,13 +96,13 @@ class Database:
             try:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_todos_todo_date ON todos(todo_date)")
             except Exception:
-                pass
+                logger.debug("Migration: idx_todos_todo_date index already exists")
 
             # Migration: add remind_date column for one-time dated reminders
             try:
                 conn.execute("ALTER TABLE reminders ADD COLUMN remind_date TEXT")
             except Exception:
-                pass
+                logger.debug("Migration: remind_date column already exists")
 
             # Migration (F7-07): add todo_id column for bidirectional todo-pomodoro linking
             try:
@@ -106,7 +111,7 @@ class Database:
                     "REFERENCES todos(id) ON DELETE SET NULL"
                 )
             except Exception:
-                pass
+                logger.debug("Migration: todo_id column already exists")
             # Backfill: set todo_id from todos.pomodoro_id for existing records
             conn.execute(
                 "UPDATE pomodoro_entries SET todo_id = ("

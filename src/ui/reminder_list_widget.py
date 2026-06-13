@@ -9,6 +9,10 @@ from PyQt6.QtWidgets import (
     QComboBox, QSpinBox, QDateEdit, QMessageBox, QMenu,
 )
 
+from src.services.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class _ReminderEditDialog(QDialog):
     """内嵌编辑弹窗：添加/编辑提醒。"""
@@ -345,13 +349,15 @@ class ReminderListWidget(QWidget):
             return
         repeat_type = ["none", "daily", "weekly", "weekday"][self._repeat_combo.currentIndex()]
         remind_date = self._add_date.date().toString("yyyy-MM-dd") if repeat_type == "none" else None
+        remind_time = self._add_time.time().toString("HH:mm")
         self._engine.add_reminder(
             title=title,
-            remind_time=self._add_time.time().toString("HH:mm"),
+            remind_time=remind_time,
             remind_date=remind_date,
             repeat_type=repeat_type,
             snooze_min=10,
         )
+        logger.info("Reminder added: title=%s, time=%s, repeat=%s", title, remind_time, repeat_type)
         self._title_input.clear()
         self.refresh()
 
@@ -371,6 +377,7 @@ class ReminderListWidget(QWidget):
             if not data["title"]:
                 return
             self._engine.update_reminder(reminder_id, **data)
+            logger.info("Reminder updated: id=%d", reminder_id)
             self.refresh()
 
     def _on_delete(self, reminder_id):
@@ -380,10 +387,12 @@ class ReminderListWidget(QWidget):
         )
         if reply == QMessageBox.StandardButton.Yes:
             self._engine.delete_reminder(reminder_id)
+            logger.info("Reminder deleted: id=%d", reminder_id)
             self.refresh()
 
     def _on_toggle(self, reminder_id):
         r = self._engine.db.get_reminder(reminder_id)
         if r:
             self._engine.update_reminder(reminder_id, enabled=0 if r["enabled"] else 1)
+            logger.debug("Reminder toggled: id=%d", reminder_id)
             self.refresh()

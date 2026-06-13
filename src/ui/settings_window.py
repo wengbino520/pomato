@@ -20,6 +20,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from src.services.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class SettingsWindow(QDialog):
     def __init__(self, config, parent=None, reminder_engine=None):
@@ -303,6 +307,7 @@ class SettingsWindow(QDialog):
             self.tag_list.addItem(tag)
 
     def _save(self):
+        logger.info("Settings save requested")
         t = self.start_time.time()
         self.config.set("work_start_time", f"{t.hour():02d}:{t.minute():02d}")
         et = self.end_time.time()
@@ -329,6 +334,7 @@ class SettingsWindow(QDialog):
             if item is not None:
                 tags.append(item.text())
         self.config.set("custom_tags", tags)
+        logger.info("Settings saved successfully")
         QMessageBox.information(self, "保存成功", "设置已保存！重启后生效（计时参数下轮番茄钟生效）。")
         self.accept()
 

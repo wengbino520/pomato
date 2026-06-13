@@ -6,12 +6,13 @@
 - API 失败时回退到简单的周一~周五判断
 """
 import json
-import logging
 from datetime import date
 from pathlib import Path
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+from src.services.logger import get_logger
+
+logger = get_logger(__name__)
 
 HOLIDAY_API = "https://timor.tech/api/holiday/year/{year}"
 

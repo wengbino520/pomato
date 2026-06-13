@@ -6,12 +6,15 @@ from PyQt6.QtGui import QBrush, QColor, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QMenu, QMessageBox, QSystemTrayIcon
 
 from src.services.ai_client import AIClient
+from src.services.logger import get_logger
 from src.ui.history_window import HistoryWindow
 from src.ui.main_window import MainWindow
 from src.ui.popup_window import PopupWindow
 from src.ui.reminder_popup import ReminderPopup
 from src.ui.report_window import ReportWindow
 from src.ui.settings_window import SettingsWindow
+
+logger = get_logger(__name__)
 
 
 class TrayManager(QObject):
@@ -34,6 +37,7 @@ class TrayManager(QObject):
     # ------------------------------------------------------------------
 
     def setup(self):
+        logger.info("TrayManager.setup — starting system tray")
         self.tray = QSystemTrayIcon(self._make_icon("idle"))
         self.tray.setToolTip("POMATO 番茄日志")
 
@@ -239,6 +243,7 @@ class TrayManager(QObject):
             # F7-07: pass todo_id to add_entry for bidirectional linking
             entry_id = self.db.add_entry(day, db_session_no, start_time, end_time,
                                          content, tags, todo_id=todo_id if todo_id else None)
+            logger.info("Entry saved: session=%d, id=%d, tags=%s", db_session_no, entry_id, tags)
             # F7-07: link pomodoro entry to todo (status already handled by popup)
             if todo_id and entry_id and self._reminder_engine:
                 self._reminder_engine.update_todo(todo_id, pomodoro_id=entry_id)
@@ -249,6 +254,7 @@ class TrayManager(QObject):
         def on_skipped():
             day = date.today().isoformat()
             self.db.add_entry(day, db_session_no, start_time, end_time, "", [], skipped=True)
+            logger.info("Entry skipped: session=%d", db_session_no)
             if self.main_window:
                 self.main_window.refresh()
             self._active_popup = None
@@ -256,6 +262,7 @@ class TrayManager(QObject):
         def on_timeout():
             day = date.today().isoformat()
             self.db.add_entry(day, db_session_no, start_time, end_time, "未记录", ["未记录"], skipped=False)
+            logger.info("Entry timed out: session=%d", db_session_no)
             if self.main_window:
                 self.main_window.refresh()
             self.tray.showMessage(
@@ -285,6 +292,7 @@ class TrayManager(QObject):
             self.show_main_window()
 
     def show_main_window(self):
+        logger.debug("show_main_window called")
         if self.main_window:
             self.main_window.refresh()
             self.main_window.show()
@@ -293,6 +301,7 @@ class TrayManager(QObject):
 
     def show_report_window(self, target_date=None):
         report_date = target_date or date.today().isoformat()
+        logger.info("Opening report window for %s", report_date)
         entries = self.db.get_entries_by_date(report_date)
         valid = [e for e in entries if not e.get("skipped") and e.get("content")]
         if not valid:
@@ -310,6 +319,7 @@ class TrayManager(QObject):
         SettingsWindow(self.config, reminder_engine=self._reminder_engine).exec()
 
     def show_history_window(self):
+        logger.info("Opening history window")
         HistoryWindow(self.db, ai_client=self.ai_client, config=self.config).exec()
 
     # ------------------------------------------------------------------
@@ -318,6 +328,7 @@ class TrayManager(QObject):
 
     @pyqtSlot(int, str, str)
     def _on_reminder_triggered(self, reminder_id: int, title: str, remind_time: str):
+        logger.info("Reminder popup shown: id=%d, title=%s", reminder_id, title)
         popup = ReminderPopup(
             reminder_id, title, remind_time,
             on_snooze=self._on_reminder_snoozed,
@@ -350,8 +361,10 @@ class TrayManager(QObject):
             return
 
     def _on_reminder_snoozed(self, reminder_id: int):
+        logger.info("Reminder snoozed: id=%d", reminder_id)
         if self._reminder_engine:
             self._reminder_engine.snooze_reminder(reminder_id)
 
     def _on_reminder_dismissed(self, reminder_id: int):
+        logger.debug("Reminder dismissed: id=%d", reminder_id)
         pass  # Already marked triggered in engine

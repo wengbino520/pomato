@@ -9,6 +9,10 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QDate
 
+from src.services.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class TodoListWidget(QWidget):
     todo_added = pyqtSignal(str, int, str, str)  # title, priority, due_date, note
@@ -218,6 +222,7 @@ class TodoListWidget(QWidget):
         priority = self._priority_combo.currentIndex()
         due_date = self._due_date.date().toString("yyyy-MM-dd")
         self._engine.add_todo(title, priority=priority, due_date=due_date)
+        logger.info("Todo added: title=%s, priority=%d", title, priority)
         self.todo_added.emit(title, priority, due_date, "")
         self._title_input.clear()
         self._title_input.setFocus()
@@ -225,6 +230,7 @@ class TodoListWidget(QWidget):
     def _on_toggle(self, todo_id: int, checked: bool):
         status = "done" if checked else "pending"
         self._engine.update_todo(todo_id, status=status)
+        logger.debug("Todo toggled: id=%d, status=%s", todo_id, status)
 
     def _on_edit(self, todo_id: int):
         todo = self._engine.db.get_todo(todo_id)
@@ -246,3 +252,4 @@ class TodoListWidget(QWidget):
         )
         if reply == QMessageBox.StandardButton.Yes:
             self._engine.delete_todo(todo_id)
+            logger.info("Todo deleted: id=%d", todo_id)

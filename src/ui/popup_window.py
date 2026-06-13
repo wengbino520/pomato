@@ -1,8 +1,7 @@
 import sys
 
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QKeySequence, QShortcut
-from PyQt6.QtGui import QTextCursor
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QKeySequence, QShortcut, QTextCursor
 from PyQt6.QtWidgets import (
     QDialog,
     QFrame,
@@ -14,7 +13,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from PyQt6.QtCore import pyqtSignal
+from src.services.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class PopupWindow(QDialog):
@@ -263,12 +264,21 @@ class PopupWindow(QDialog):
         todo_id = self._todo_combo.currentData() or 0
         if todo_id and self._todo_done_cb.isChecked() and self._reminder_engine:
             self._reminder_engine.update_todo(todo_id, status="done")
+        logger.info("Popup submitted: session=%d, tags=%s, todo_id=%d", self.session_no, self.selected_tags, todo_id)
         self.submitted.emit(content, list(self.selected_tags), todo_id)
         self.accept()
 
     def _on_skip(self):
         self._timeout_timer.stop()
+        logger.info("Popup skipped: session=%d", self.session_no)
         self.skipped.emit()
+        self.reject()
+
+    def _on_timeout(self):
+        if not self.isVisible():
+            return
+        logger.info("Popup timed out: session=%d", self.session_no)
+        self.timed_out.emit()
         self.reject()
 
     def _on_repeat_last(self):

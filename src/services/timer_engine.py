@@ -4,6 +4,9 @@ from enum import Enum
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
 from src.services.holiday_manager import HolidayManager
+from src.services.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class TimerState(Enum):
@@ -52,10 +55,12 @@ class TimerEngine(QObject):
 
     def manual_start(self):
         if self._state == TimerState.IDLE:
+            logger.info("Manual start → session %d", self._session_no + 1)
             self._start_work_session()
 
     def skip_break(self):
         if self._state in (TimerState.SHORT_BREAK, TimerState.LONG_BREAK):
+            logger.info("Break skipped → session %d", self._session_no + 1)
             self._start_work_session()
 
     def restore_session_no(self, db):
@@ -68,6 +73,7 @@ class TimerEngine(QObject):
 
     def pause_resume(self):
         self._paused = not self._paused
+        logger.debug("Timer %s", "paused" if self._paused else "resumed")
 
     @property
     def state(self):
@@ -157,11 +163,13 @@ class TimerEngine(QObject):
         self._session_start = datetime.now().strftime("%H:%M:%S")
         self._remaining = self.config.get("pomodoro_duration", 25) * 60
         self._state = TimerState.WORK
+        logger.info("Work session %d started (remaining=%ds)", self._session_no, self._remaining)
         self.state_changed.emit("work")
 
     def _handle_session_end(self):
         if self._state == TimerState.WORK:
             end_time = datetime.now().strftime("%H:%M:%S")
+            logger.info("Work session %d ended (%s → %s)", self._session_no, self._session_start, end_time)
             self.work_session_ended.emit(self._session_no, self._session_start, end_time)
 
             # 若当前已过每日截止时间，不再进入休息，直接回到空闲
@@ -180,10 +188,12 @@ class TimerEngine(QObject):
             else:
                 self._state = TimerState.SHORT_BREAK
                 self._remaining = self.config.get("short_break_duration", 5) * 60
+            logger.info("Entering %s (%ds)", self._state.value, self._remaining)
             self.state_changed.emit(self._state.value)
 
         elif self._state in (TimerState.SHORT_BREAK, TimerState.LONG_BREAK):
             is_long = self._state == TimerState.LONG_BREAK
+            logger.info("%s ended", "Long break" if is_long else "Short break")
             self.break_ended.emit(is_long)
 
             # 若当前已过每日截止时间，不再启动新番茄钟

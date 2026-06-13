@@ -11,6 +11,10 @@ from PyQt6.QtWidgets import (
     QLabel, QPushButton, QFrame,
 )
 
+from src.services.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class ReminderPopup(QDialog):
     snoozed = pyqtSignal(int)    # reminder_id

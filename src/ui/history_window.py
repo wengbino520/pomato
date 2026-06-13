@@ -18,6 +18,9 @@ from PyQt6.QtWidgets import (
 )
 
 from src.services.ai_client import AIClient
+from src.services.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class _HistoryAIWorker(QThread):
@@ -335,6 +338,7 @@ class HistoryWindow(QDialog):
                 break
 
     def _on_ai_error(self, error_msg: str):
+        logger.error("AI summary failed for %s: %s", self._current_date, error_msg)
         self.progress.hide()
         self.ai_summary_btn.setText("🤖 AI 总结")
         self.ai_summary_btn.setEnabled(True)

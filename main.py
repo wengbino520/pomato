@@ -34,6 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from PyQt6.QtWidgets import QApplication
 
+from src.services.logger import setup_logging
 from src.core.config import Config
 from src.core.database import Database
 from src.services.reminder_engine import ReminderEngine
@@ -42,6 +43,8 @@ from src.app import TrayManager
 
 
 def main():
+    setup_logging()   # 日志落盘到 ~/.pomato/logs/
+
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)   # Keep alive when all windows closed
     app.setApplicationName("POMATO")

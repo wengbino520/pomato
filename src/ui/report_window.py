@@ -16,6 +16,10 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
+from src.services.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class _AIWorker(QThread):
     chunk_received = pyqtSignal(str)
@@ -173,10 +177,15 @@ class ReportWindow(QDialog):
         self.copy_btn.setEnabled(True)
         self.export_btn.setEnabled(True)
         self.export_docx_btn.setEnabled(True)
-        self.db.save_report(self.report_date, self.entries, ai_summary=result, final_report=result)
+        try:
+            self.db.save_report(self.report_date, self.entries, ai_summary=result, final_report=result)
+            logger.info("Report saved for %s (%d chars)", self.report_date, len(result))
+        except Exception:
+            logger.exception("Failed to save report for %s", self.report_date)
 
     def _on_error(self, error_msg: str):
         self.progress.hide()
+        logger.error("AI report generation failed for %s: %s", self.report_date, error_msg)
         self.status_label.setText("⚠ AI 生成失败，已展示原始记录")
         self.status_label.setStyleSheet("color:#f44336; font-size:12px;")
         self.regenerate_btn.setEnabled(True)

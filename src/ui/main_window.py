@@ -23,9 +23,12 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from src.services.logger import get_logger
 from src.ui.history_window import HistoryWindow
 from src.ui.todo_list_widget import TodoListWidget
 from src.ui.reminder_list_widget import ReminderListWidget
+
+logger = get_logger(__name__)
 
 
 class EditEntryDialog(QDialog):
@@ -718,6 +721,7 @@ class MainWindow(QMainWindow):
             # F7-07: pass todo_id to update_entry
             self.db.update_entry(entry["id"], content, tags, start, end,
                                  todo_id=todo_id if todo_id else None)
+            logger.info("Entry edited: id=%d, tags=%s", entry["id"], tags)
             # Update todo linkage if changed
             if engine:
                 old_todo_id = entry.get("todo_id")
@@ -733,6 +737,7 @@ class MainWindow(QMainWindow):
             self.refresh()
 
     def _on_delete_entry(self, entry_id: int):
+        logger.info("Entry deleted: id=%d", entry_id)
         self.db.delete_entry(entry_id)
         self.refresh()
 
@@ -760,6 +765,7 @@ class MainWindow(QMainWindow):
                         engine.update_todo(todo_id, pomodoro_id=entry_id)
             added += 1
         if added:
+            logger.info("Manual entry added: %d entries for %s", added, target_date)
             self.refresh()
 
     # ------------------------------------------------------------------

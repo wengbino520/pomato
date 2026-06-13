@@ -2,6 +2,10 @@ from datetime import date
 
 from openai import OpenAI
 
+from src.services.logger import get_logger
+
+logger = get_logger(__name__)
+
 DEFAULT_SYSTEM_PROMPT = """\
 你是一个专业的工作日报助手。请根据用户提供的番茄钟记录，生成一份结构化、专业的工作日报。
 
@@ -65,24 +69,33 @@ class AIClient:
             {"role": "user", "content": prompt},
         ]
 
-        if on_chunk:
-            chunks: list[str] = []
-            stream = client.chat.completions.create(
+        logger.info("AI request: model=%s, entries=%d, date=%s", model, len(entries), report_date)
+        try:
+            if on_chunk:
+                chunks: list[str] = []
+                stream = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    stream=True,
+                    temperature=0.7,
+                )
+                for chunk in stream:
+                    delta = chunk.choices[0].delta.content or ""
+                    if delta:
+                        chunks.append(delta)
+                        on_chunk(delta)
+                result = "".join(chunks)
+                logger.info("AI response received: %d chars", len(result))
+                return result
+
+            response = client.chat.completions.create(
                 model=model,
                 messages=messages,
-                stream=True,
                 temperature=0.7,
             )
-            for chunk in stream:
-                delta = chunk.choices[0].delta.content or ""
-                if delta:
-                    chunks.append(delta)
-                    on_chunk(delta)
-            return "".join(chunks)
-
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=0.7,
-        )
-        return response.choices[0].message.content or ""
+            result = response.choices[0].message.content or ""
+            logger.info("AI response received: %d chars", len(result))
+            return result
+        except Exception:
+            logger.exception("AI API call failed: model=%s, entries=%d, date=%s", model, len(entries), report_date)
+            raise

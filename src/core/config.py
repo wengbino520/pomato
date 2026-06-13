@@ -3,6 +3,10 @@ import base64
 import sys
 from pathlib import Path
 
+from src.services.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 AUTOSTART_APP_NAME = "POMATO"
 WINDOWS_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -51,7 +55,8 @@ class Config:
                 if encrypted_key and not saved.get("api_key"):
                     saved["api_key"] = self._decrypt_api_key(encrypted_key)
                 self._data = {**DEFAULT_CONFIG, **saved}
-            except Exception:
+            except Exception as e:
+                logger.warning("Config file corrupted, using defaults: %s", e)
                 self._data = DEFAULT_CONFIG.copy()
         else:
             self._data = DEFAULT_CONFIG.copy()
@@ -63,8 +68,11 @@ class Config:
         payload = dict(self._data)
         api_key = (payload.pop("api_key", "") or "").strip()
         payload["api_key_encrypted"] = self._encrypt_api_key(api_key) if api_key else ""
-        with open(self.config_file, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
+        try:
+            with open(self.config_file, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+        except Exception:
+            logger.exception("Failed to save config to %s", self.config_file)
 
     def get(self, key, default=None):
         return self._data.get(key, default)
