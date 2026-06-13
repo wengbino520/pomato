@@ -4,6 +4,7 @@ ReportWindow 的 Markdown→纯文本 转换与 Word 导出内容正确性测试
 """
 import pytest
 import re as _re_mod
+from datetime import date
 from unittest.mock import MagicMock, patch, mock_open
 
 from PyQt6.QtWidgets import QDialog
@@ -28,12 +29,19 @@ class _DummyDB:
     def get_entries_by_date(self, date_str):
         return []
 
+    def get_entries_by_date_range(self, start_date, end_date):
+        return []
+
+    def get_todos_by_date_range(self, start_date, end_date):
+        return []
+
     def save_report(self, *args, **kwargs):
         pass
 
 
 class _DummyAIClient:
-    def generate_report(self, entries, report_date, on_chunk=None):
+    def generate_report(self, entries, report_date, on_chunk=None,
+                         todos=None, period="daily"):
         return "# Test Report\nGenerated content."
 
 
@@ -121,6 +129,9 @@ class TestExportDocx:
             win.editor.toPlainText.return_value = "# Test"
             win.report_date = "2026-06-01"
             win.entries = []
+            win._period = "daily"
+            win._start_date = date(2026, 6, 1)
+            win._end_date = date(2026, 6, 1)
             win._export_docx()  # 不崩溃即通过
 
     def test_export_docx_creates_document_with_content(self, qapp, tmp_path):
@@ -148,6 +159,9 @@ class TestExportDocx:
             win.editor.toPlainText.return_value = sample_md
             win.report_date = "2026-06-01"
             win.entries = []
+            win._period = "daily"
+            win._start_date = date(2026, 6, 1)
+            win._end_date = date(2026, 6, 1)
 
             win._export_docx()
 
@@ -175,6 +189,9 @@ class TestExportDocx:
         win.editor.toPlainText.return_value = "# Test"
         win.report_date = "2026-06-01"
         win.entries = []
+        win._period = "daily"
+        win._start_date = date(2026, 6, 1)
+        win._end_date = date(2026, 6, 1)
 
         with patch.object(QDialog, "__init__", return_value=None), \
              patch("src.ui.report_window.QMessageBox.warning") as mock_warn, \
@@ -200,6 +217,9 @@ class TestExportDocx:
             win.editor.toPlainText.return_value = sample_md
             win.report_date = "2026-06-01"
             win.entries = []
+            win._period = "daily"
+            win._start_date = date(2026, 6, 1)
+            win._end_date = date(2026, 6, 1)
 
             win._export_docx()
 
@@ -255,13 +275,18 @@ class TestGenerateFallback:
     """AI 失败时的回退展示内容。"""
 
     def test_fallback_contains_header(self):
+        from datetime import date as dt_date
         win = ReportWindow.__new__(ReportWindow)
         win.report_date = "2026-06-01"
         win.entries = []
+        win._period = "daily"
+        win._start_date = dt_date(2026, 6, 1)
+        win._end_date = dt_date(2026, 6, 1)
         result = win._generate_fallback()
-        assert "# 工作日报 2026-06-01" in result
+        assert "工作报告" in result
 
     def test_fallback_shows_valid_entries_only(self):
+        from datetime import date as dt_date
         win = ReportWindow.__new__(ReportWindow)
         win.report_date = "2026-06-01"
         win.entries = [
@@ -270,12 +295,16 @@ class TestGenerateFallback:
             {"start_time": "09:30:00", "end_time": "09:55:00",
              "content": "", "tags": [], "skipped": 1},
         ]
+        win._period = "daily"
+        win._start_date = dt_date(2026, 6, 1)
+        win._end_date = dt_date(2026, 6, 1)
         result = win._generate_fallback()
         assert "任务A" in result
         assert "开发" in result
         assert "09:30" not in result  # skipped entry not shown
 
     def test_fallback_shows_correct_count(self):
+        from datetime import date as dt_date
         win = ReportWindow.__new__(ReportWindow)
         win.report_date = "2026-06-01"
         win.entries = [
@@ -284,12 +313,87 @@ class TestGenerateFallback:
             {"start_time": "09:30:00", "end_time": "09:55:00",
              "content": "B", "tags": [], "skipped": 0},
         ]
+        win._period = "daily"
+        win._start_date = dt_date(2026, 6, 1)
+        win._end_date = dt_date(2026, 6, 1)
         result = win._generate_fallback()
         assert "共 2 个番茄钟" in result
 
     def test_fallback_empty_entries(self):
+        from datetime import date as dt_date
         win = ReportWindow.__new__(ReportWindow)
         win.report_date = "2026-06-01"
         win.entries = []
+        win._period = "daily"
+        win._start_date = dt_date(2026, 6, 1)
+        win._end_date = dt_date(2026, 6, 1)
         result = win._generate_fallback()
         assert "共 0 个番茄钟" in result
+
+
+# ── D2: 周期选择 ──────────────────────────────────────────────────────────────
+
+class TestPeriodRange:
+    """_get_period_range 工具函数。"""
+
+    def test_daily_returns_same_day(self):
+        from src.ui.report_window import _get_period_range
+        start, end = _get_period_range(date(2026, 6, 10), "daily")
+        assert start == date(2026, 6, 10)
+        assert end == date(2026, 6, 10)
+
+    def test_weekly_returns_monday_to_sunday(self):
+        from src.ui.report_window import _get_period_range
+        # 2026-06-10 is Wednesday
+        start, end = _get_period_range(date(2026, 6, 10), "weekly")
+        assert start == date(2026, 6, 8)   # Monday
+        assert end == date(2026, 6, 14)     # Sunday
+
+    def test_monthly_returns_first_to_last(self):
+        from src.ui.report_window import _get_period_range
+        start, end = _get_period_range(date(2026, 6, 15), "monthly")
+        assert start == date(2026, 6, 1)
+        assert end == date(2026, 6, 30)
+
+    def test_monthly_december_boundary(self):
+        from src.ui.report_window import _get_period_range
+        start, end = _get_period_range(date(2026, 12, 15), "monthly")
+        assert start == date(2026, 12, 1)
+        assert end == date(2026, 12, 31)
+
+
+class TestFallbackPeriod:
+    """D2: 周报/月报回退文本差异。"""
+
+    def test_weekly_fallback_uses_weekly_label(self):
+        from datetime import date as dt_date
+        win = ReportWindow.__new__(ReportWindow)
+        win.report_date = "2026-06-10"
+        win.entries = []
+        win._period = "weekly"
+        win._start_date = dt_date(2026, 6, 8)
+        win._end_date = dt_date(2026, 6, 14)
+        result = win._generate_fallback()
+        assert "本周" in result
+
+    def test_monthly_fallback_uses_monthly_label(self):
+        from datetime import date as dt_date
+        win = ReportWindow.__new__(ReportWindow)
+        win.report_date = "2026-06-10"
+        win.entries = []
+        win._period = "monthly"
+        win._start_date = dt_date(2026, 6, 1)
+        win._end_date = dt_date(2026, 6, 30)
+        result = win._generate_fallback()
+        assert "本月" in result
+
+    def test_weekly_fallback_has_range_in_title(self):
+        from datetime import date as dt_date
+        win = ReportWindow.__new__(ReportWindow)
+        win.report_date = "2026-06-10"
+        win.entries = []
+        win._period = "weekly"
+        win._start_date = dt_date(2026, 6, 8)
+        win._end_date = dt_date(2026, 6, 14)
+        result = win._generate_fallback()
+        assert "06/08 ~ 06/14" in result

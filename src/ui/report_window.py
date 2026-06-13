@@ -1,10 +1,11 @@
-from datetime import date
+from datetime import date, timedelta
 import re
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QTextCursor
 from PyQt6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QFileDialog,
     QHBoxLayout,
@@ -22,18 +23,36 @@ from src.ui.styles import btn_style
 logger = get_logger(__name__)
 
 
+def _get_period_range(dt: date, period: str) -> tuple[date, date]:
+    """Return (start, end) dates for the given period containing dt."""
+    if period == "daily":
+        return dt, dt
+    elif period == "weekly":
+        monday = dt - timedelta(days=dt.weekday())
+        return monday, monday + timedelta(days=6)
+    elif period == "monthly":
+        first = dt.replace(day=1)
+        if dt.month == 12:
+            last = dt.replace(year=dt.year + 1, month=1, day=1) - timedelta(days=1)
+        else:
+            last = dt.replace(month=dt.month + 1, day=1) - timedelta(days=1)
+        return first, last
+    raise ValueError(f"Unknown period: {period}")
+
+
 class _AIWorker(QThread):
     chunk_received = pyqtSignal(str)
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
 
     def __init__(self, ai_client, entries: list[dict], report_date: str,
-                 todos: list[dict] | None = None):
+                 todos: list[dict] | None = None, period: str = "daily"):
         super().__init__()
         self.ai_client = ai_client
         self.entries = entries
         self.report_date = report_date
         self.todos = todos or []
+        self.period = period
 
     def run(self):
         try:
@@ -42,6 +61,7 @@ class _AIWorker(QThread):
                 self.report_date,
                 on_chunk=lambda c: self.chunk_received.emit(c),
                 todos=self.todos if self.todos else None,
+                period=self.period,
             )
             self.finished.emit(result)
         except Exception as exc:
@@ -55,7 +75,10 @@ class ReportWindow(QDialog):
         self.db = db
         self.ai_client = ai_client
         self.report_date = report_date or date.today().isoformat()
-        self.entries = db.get_entries_by_date(self.report_date)
+        self._period = "daily"
+        self._dt = date.fromisoformat(self.report_date)
+        self._start_date, self._end_date = _get_period_range(self._dt, self._period)
+        self.entries = self._load_entries()
         self._worker: _AIWorker | None = None
         self._setup_ui()
         self._start_generation()
@@ -75,11 +98,30 @@ class ReportWindow(QDialog):
 
         # header
         hl = QHBoxLayout()
-        title = QLabel(f"📋 工作日报 · {self.report_date}")
+        title = QLabel(f"📋 生成报告")
         title.setStyleSheet("font-size:15px; font-weight:bold; color:#333;")
+
+        # Period selector
+        self.period_combo = QComboBox()
+        self.period_combo.addItems(["日报", "周报", "月报"])
+        self.period_combo.setCurrentIndex(0)
+        self.period_combo.setStyleSheet(
+            "QComboBox { background:#fff; border:1px solid #ccc; border-radius:4px;"
+            "  padding:2px 6px; font-size:12px; }"
+            "QComboBox::drop-down { border:none; }"
+        )
+        self.period_combo.currentIndexChanged.connect(self._on_period_changed)
+
+        # Date range label
+        self.date_range_label = QLabel(self._make_range_label())
+        self.date_range_label.setStyleSheet("color:#757575; font-size:12px;")
+
         self.status_label = QLabel("AI 生成中…")
         self.status_label.setStyleSheet("color:#ef5350; font-size:12px;")
+
         hl.addWidget(title)
+        hl.addWidget(self.period_combo)
+        hl.addWidget(self.date_range_label)
         hl.addStretch()
         hl.addWidget(self.status_label)
         layout.addLayout(hl)
@@ -139,6 +181,31 @@ class ReportWindow(QDialog):
         layout.addLayout(bl)
 
     # ------------------------------------------------------------------
+    # Period helpers
+    # ------------------------------------------------------------------
+
+    PERIOD_MAP = {"日报": "daily", "周报": "weekly", "月报": "monthly"}
+
+    def _make_range_label(self) -> str:
+        if self._start_date == self._end_date:
+            return self._start_date.strftime("%m/%d")
+        return f"{self._start_date.strftime('%m/%d')} ~ {self._end_date.strftime('%m/%d')}"
+
+    def _load_entries(self):
+        if self._start_date == self._end_date:
+            return self.db.get_entries_by_date(self._start_date.isoformat())
+        return self.db.get_entries_by_date_range(
+            self._start_date.isoformat(), self._end_date.isoformat()
+        )
+
+    def _on_period_changed(self, index: int):
+        period_key = ["日报", "周报", "月报"][index]
+        self._period = self.PERIOD_MAP[period_key]
+        self._start_date, self._end_date = _get_period_range(self._dt, self._period)
+        self.date_range_label.setText(self._make_range_label())
+        self.entries = self._load_entries()
+
+    # ------------------------------------------------------------------
     # Generation flow
     # ------------------------------------------------------------------
 
@@ -152,8 +219,13 @@ class ReportWindow(QDialog):
         self.export_btn.setEnabled(False)
         self.export_docx_btn.setEnabled(False)
 
+        # Query todos by date range for weekly/monthly
+        todos = self.db.get_todos_by_date_range(
+            self._start_date.isoformat(), self._end_date.isoformat()
+        )
+
         self._worker = _AIWorker(self.ai_client, self.entries, self.report_date,
-                                 todos=self.db.get_todos(date_str=self.report_date, include_done=True))
+                                 todos=todos, period=self._period)
         self._worker.chunk_received.connect(self._on_chunk)
         self._worker.finished.connect(self._on_finished)
         self._worker.error.connect(self._on_error)
@@ -174,11 +246,14 @@ class ReportWindow(QDialog):
         self.copy_btn.setEnabled(True)
         self.export_btn.setEnabled(True)
         self.export_docx_btn.setEnabled(True)
-        try:
-            self.db.save_report(self.report_date, self.entries, ai_summary=result, final_report=result)
-            logger.info("Report saved for %s (%d chars)", self.report_date, len(result))
-        except Exception:
-            logger.exception("Failed to save report for %s", self.report_date)
+        # Only auto-save daily reports (weekly/monthly have different key semantics)
+        if self._period == "daily":
+            try:
+                self.db.save_report(self.report_date, self.entries,
+                                    ai_summary=result, final_report=result)
+                logger.info("Report saved for %s (%d chars)", self.report_date, len(result))
+            except Exception:
+                logger.exception("Failed to save report for %s", self.report_date)
 
     def _on_error(self, error_msg: str):
         self.progress.hide()
@@ -199,12 +274,18 @@ class ReportWindow(QDialog):
 
     def _generate_fallback(self) -> str:
         valid = [e for e in self.entries if not e.get("skipped") and e.get("content")]
-        lines = [f"# 工作日报 {self.report_date}", ""]
-        lines.append(f"## 今日记录（共 {len(valid)} 个番茄钟）")
+        period_labels = {"daily": "今日", "weekly": "本周", "monthly": "本月"}
+        label = period_labels.get(self._period, "今日")
+
+        lines = [f"# 工作报告 · {self._make_range_label()}", ""]
+        lines.append(f"## {label}记录（共 {len(valid)} 个番茄钟）")
         for e in valid:
             tags = ", ".join(e.get("tags") or [])
             tag_str = f"[{tags}] " if tags else ""
-            lines.append(f"- {e['start_time'][:5]}-{e['end_time'][:5]} {tag_str}{e['content']}")
+            date_prefix = ""
+            if self._period != "daily":
+                date_prefix = f"{e.get('date', '')} "
+            lines.append(f"- {date_prefix}{e['start_time'][:5]}-{e['end_time'][:5]} {tag_str}{e['content']}")
         return "\n".join(lines)
 
     # ------------------------------------------------------------------
@@ -219,7 +300,8 @@ class ReportWindow(QDialog):
         QTimer.singleShot(2000, lambda: self.copy_btn.setText(original))
 
     def _export_markdown(self):
-        default_name = f"日报_{self.report_date}.md"
+        period_names = {"daily": "日报", "weekly": "周报", "monthly": "月报"}
+        default_name = f"{period_names.get(self._period, '报告')}_{self._make_range_label().replace(' ~ ', '-').replace('/', '-')}.md"
         path, _ = QFileDialog.getSaveFileName(
             self, "导出日报", default_name, "Markdown 文件 (*.md);;文本文件 (*.txt)"
         )
@@ -266,7 +348,8 @@ class ReportWindow(QDialog):
             )
             return
 
-        default_name = f"日报_{self.report_date}.docx"
+        period_names = {"daily": "日报", "weekly": "周报", "monthly": "月报"}
+        default_name = f"{period_names.get(self._period, '报告')}_{self._make_range_label().replace(' ~ ', '-').replace('/', '-')}.docx"
         path, _ = QFileDialog.getSaveFileName(
             self, "导出 Word 日报", default_name,
             "Word 文档 (*.docx);;所有文件 (*)"
