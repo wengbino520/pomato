@@ -228,6 +228,25 @@ class Database:
             return d
         return None
 
+    def get_entries_by_date_range(self, start_date: str, end_date: str):
+        """Return all non-skipped entries between two dates (inclusive).
+
+        C4 fix: TagPieWidget needs this for weekly tag distribution.
+        """
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                """SELECT * FROM pomodoro_entries
+                   WHERE date BETWEEN ? AND ? AND skipped = 0
+                   ORDER BY date, start_time""",
+                (start_date, end_date),
+            ).fetchall()
+        result = []
+        for row in rows:
+            d = dict(row)
+            d["tags"] = json.loads(d["tags"])
+            result.append(d)
+        return result
+
     def get_daily_tomato_counts(self, start_date: str, end_date: str):
         """Return (date, completed_count) pairs for date range (C3).
 

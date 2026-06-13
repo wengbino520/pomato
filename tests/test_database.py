@@ -663,3 +663,32 @@ class TestDailyTomatoCounts:
         counts = dict(tmp_db.get_daily_tomato_counts("2026-06-10", "2026-06-10"))
         assert counts["2026-06-10"] == 1
 
+
+class TestEntriesByDateRange:
+    """C4 fix: get_entries_by_date_range() 返回日期范围内的完整记录。"""
+
+    def test_returns_entries_with_tags(self, tmp_db):
+        add(tmp_db, date="2026-06-08", content="周一", tags=["开发", "测试"])
+        add(tmp_db, date="2026-06-10", content="周三", tags=["文档"])
+        entries = tmp_db.get_entries_by_date_range("2026-06-08", "2026-06-10")
+        assert len(entries) == 2
+        assert entries[0]["tags"] == ["开发", "测试"]
+        assert entries[1]["tags"] == ["文档"]
+
+    def test_excludes_skipped(self, tmp_db):
+        add(tmp_db, date="2026-06-08", content="正常")
+        add(tmp_db, date="2026-06-09", content="跳过", skipped=True)
+        entries = tmp_db.get_entries_by_date_range("2026-06-08", "2026-06-09")
+        assert len(entries) == 1
+        assert entries[0]["content"] == "正常"
+
+    def test_empty_range(self, tmp_db):
+        entries = tmp_db.get_entries_by_date_range("2026-01-01", "2026-01-05")
+        assert entries == []
+
+    def test_single_day(self, tmp_db):
+        add(tmp_db, date="2026-06-10", content="当天", tags=["会议"])
+        entries = tmp_db.get_entries_by_date_range("2026-06-10", "2026-06-10")
+        assert len(entries) == 1
+        assert entries[0]["tags"] == ["会议"]
+

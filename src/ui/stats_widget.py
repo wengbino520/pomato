@@ -223,13 +223,13 @@ class StatsWidget(QWidget):
         """被动刷新：根据选中日期更新三个图表。"""
         self._last_date_str = date_str
         dt = date.fromisoformat(date_str)
-        pomodoro_minutes = 25  # default, overridden in _refresh_trend if config available
+        monday, sunday = _week_range(dt)
 
         # 柱状图：本周
         self._refresh_bar(dt)
 
-        # 饼图：选中日期
-        self._refresh_pie(date_str)
+        # 饼图：本周标签分布（与柱状图范围一致）
+        self._refresh_pie(monday.isoformat(), sunday.isoformat())
 
         # 折线图：近 N 天
         self._refresh_trend(date_str)
@@ -258,13 +258,12 @@ class StatsWidget(QWidget):
 
     # ── 饼图 ──────────────────────────────────────────────
 
-    def _refresh_pie(self, date_str: str):
-        entries = self.db.get_entries_by_date(date_str)
+    def _refresh_pie(self, start_date: str, end_date: str):
+        entries = self.db.get_entries_by_date_range(start_date, end_date)
         tag_counter: Counter[str] = Counter()
         for e in entries:
-            if not e.get("skipped"):
-                for tag in e.get("tags", []):
-                    tag_counter[tag] += 1
+            for tag in e.get("tags", []):
+                tag_counter[tag] += 1
         self.pie_widget.update_data(dict(tag_counter))
 
     # ── 折线图 ────────────────────────────────────────────

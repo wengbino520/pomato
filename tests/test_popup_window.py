@@ -105,6 +105,39 @@ class TestPopupTagPreselection:
         assert "不存在的标签" not in pw.selected_tags
         pw.close()
 
+    def test_multi_tag_selection_via_click(self, qapp, tmp_config):
+        """C4 fix: 点击多个标签按钮，全部保持选中状态。"""
+        pw = PopupWindow(1, tmp_config)
+        pw.show()
+
+        # Click first two tags
+        first_tag = pw._tag_list[0]
+        second_tag = pw._tag_list[1]
+        pw.tag_buttons[first_tag].click()
+        pw.tag_buttons[second_tag].click()
+
+        assert first_tag in pw.selected_tags
+        assert second_tag in pw.selected_tags
+        assert len(pw.selected_tags) == 2
+        pw.close()
+
+    def test_multi_tag_toggle_off(self, qapp, tmp_config):
+        """C4 fix: 再次点击已选中标签可取消选中，不影响其他标签。"""
+        pw = PopupWindow(1, tmp_config)
+        pw.show()
+
+        first_tag = pw._tag_list[0]
+        second_tag = pw._tag_list[1]
+        pw.tag_buttons[first_tag].click()
+        pw.tag_buttons[second_tag].click()
+        # Toggle first off
+        pw.tag_buttons[first_tag].click()
+
+        assert first_tag not in pw.selected_tags
+        assert second_tag in pw.selected_tags
+        assert len(pw.selected_tags) == 1
+        pw.close()
+
 
 # ═══════════════════════════════════════════════════════════════════
 # PopupWindow US-03 — 键盘快捷键

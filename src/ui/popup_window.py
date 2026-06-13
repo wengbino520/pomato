@@ -122,7 +122,6 @@ class PopupWindow(QDialog):
         self.tag_buttons: dict[str, QPushButton] = {}
         for tag in self.config.get("custom_tags", ["开发", "测试", "文档", "会议", "研究", "其他"]):
             btn = QPushButton(tag)
-            btn.setCheckable(True)
             btn.setStyleSheet(self._tag_style(False))
             btn.clicked.connect(lambda _checked, t=tag, b=btn: self._toggle_tag(t, b))
             tags_layout.addWidget(btn)
