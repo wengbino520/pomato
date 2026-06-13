@@ -205,6 +205,25 @@ class TestReports:
         assert tmp_db.get_all_report_dates() == []
 
 
+class TestGetAllEntryDates:
+    """get_all_entry_dates —— 返回所有有番茄钟记录的日期。"""
+
+    def test_returns_distinct_dates_descending(self, tmp_db):
+        add(tmp_db, date="2026-06-01", session_no=1, content="A")
+        add(tmp_db, date="2026-06-03", session_no=1, content="B")
+        add(tmp_db, date="2026-06-03", session_no=2, content="C")
+        add(tmp_db, date="2026-06-02", session_no=1, content="D")
+        dates = tmp_db.get_all_entry_dates()
+        assert dates == ["2026-06-03", "2026-06-02", "2026-06-01"]
+
+    def test_empty_when_no_entries(self, tmp_db):
+        assert tmp_db.get_all_entry_dates() == []
+
+    def test_includes_dates_with_only_skipped_entries(self, tmp_db):
+        add(tmp_db, date="2026-06-05", session_no=1, content="", skipped=True)
+        assert "2026-06-05" in tmp_db.get_all_entry_dates()
+
+
 # ── 边界值测试 ─────────────────────────────────────────────────────────────────
 
 class TestDatabaseBoundary:

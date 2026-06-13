@@ -385,15 +385,18 @@ class EntryItem(QFrame):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, config, db, timer, on_generate_report=None):
+    def __init__(self, config, db, timer, on_generate_report=None, on_open_settings=None):
         super().__init__()
         self.config = config
         self.db = db
         self.timer = timer
         self.on_generate_report = on_generate_report
+        self.on_open_settings = on_open_settings
         self.view_date = date.today()
         self._setup_ui()
         self.refresh()
+        # 监听计时器状态变化以同步暂停按钮文字
+        self.timer.state_changed.connect(self._on_timer_state_changed)
 
     # ------------------------------------------------------------------
     # UI construction
@@ -555,6 +558,11 @@ class MainWindow(QMainWindow):
         add_btn.setStyleSheet(self._btn_style("#5d4037"))
         add_btn.clicked.connect(self._on_add_entry)
 
+        self.pause_btn = QPushButton("⏸  暂停")
+        self.pause_btn.setStyleSheet(self._btn_style("#1976d2"))
+        self.pause_btn.clicked.connect(self._on_pause_resume)
+        self.pause_btn.setEnabled(False)
+
         self.history_btn = QPushButton("📚  历史日报")
         self.history_btn.setStyleSheet(
             "QPushButton { background:#ef5350; color:white; border:none;"
@@ -568,11 +576,17 @@ class MainWindow(QMainWindow):
         report_btn.setStyleSheet(self._btn_style("#ef5350"))
         report_btn.clicked.connect(self._on_generate_report)
 
+        settings_btn = QPushButton("⚙  设置")
+        settings_btn.setStyleSheet(self._btn_style("#ef5350"))
+        settings_btn.clicked.connect(self._on_open_settings)
+
         bl.addWidget(start_btn)
         bl.addWidget(add_btn)
+        bl.addWidget(self.pause_btn)
         bl.addStretch()
         bl.addWidget(self.history_btn)
         bl.addWidget(report_btn)
+        bl.addWidget(settings_btn)
         root.addWidget(bottom)
 
         # Connect timer tick
@@ -596,7 +610,6 @@ class MainWindow(QMainWindow):
         date_str = selected_date.isoformat()
         status = "今日" if selected_date == today else "历史"
         self.date_label.setText(f"{date_str} · {status}")
-        self.history_btn.setEnabled(selected_date != today)
 
         entries = self.db.get_entries_by_date(date_str)
         completed = sum(1 for e in entries if not e.get("skipped"))
@@ -659,12 +672,41 @@ class MainWindow(QMainWindow):
         self.view_date_edit.setDate(self.view_date_edit.date().addDays(1))
 
     def _open_history_window(self):
-        if self.view_date != date.today():
-            HistoryWindow(self.db, self).exec()
+        from src.services.ai_client import AIClient
+        HistoryWindow(
+            self.db, self,
+            ai_client=AIClient(self.config),
+            config=self.config,
+            initial_date=self.view_date.isoformat(),
+        ).exec()
 
     def _on_generate_report(self):
         if self.on_generate_report:
-            self.on_generate_report()
+            self.on_generate_report(self.view_date.isoformat())
+
+    def _on_pause_resume(self):
+        self.timer.pause_resume()
+        if self.timer._paused:
+            self.pause_btn.setText("▶  继续")
+            self.pause_btn.setStyleSheet(self._btn_style("#66bb6a"))
+        else:
+            self.pause_btn.setText("⏸  暂停")
+            self.pause_btn.setStyleSheet(self._btn_style("#1976d2"))
+
+    def _on_open_settings(self):
+        if self.on_open_settings:
+            self.on_open_settings()
+
+    @pyqtSlot(str)
+    def _on_timer_state_changed(self, state: str):
+        if state == "work":
+            self.pause_btn.setEnabled(True)
+            self.pause_btn.setText("⏸  暂停")
+            self.pause_btn.setStyleSheet(self._btn_style("#1976d2"))
+        elif state in ("short_break", "long_break"):
+            self.pause_btn.setEnabled(False)
+        else:
+            self.pause_btn.setEnabled(False)
 
     def _on_edit_entry(self, entry: dict):
         avail_tags = self.config.get("custom_tags", [])

@@ -41,12 +41,12 @@ class _AIWorker(QThread):
 
 
 class ReportWindow(QDialog):
-    def __init__(self, config, db, ai_client, parent=None):
+    def __init__(self, config, db, ai_client, parent=None, report_date=None):
         super().__init__(parent)
         self.config = config
         self.db = db
         self.ai_client = ai_client
-        self.report_date = date.today().isoformat()
+        self.report_date = report_date or date.today().isoformat()
         self.entries = db.get_entries_by_date(self.report_date)
         self._worker: _AIWorker | None = None
         self._setup_ui()

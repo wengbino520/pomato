@@ -11,12 +11,17 @@ from src.ui.main_window import EntryItem, MainWindow
 
 class _DummyTimer(QObject):
     tick = pyqtSignal(int, str)
+    state_changed = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
+        self._paused = False
 
     def manual_start(self):
         pass
+
+    def pause_resume(self):
+        self._paused = not self._paused
 
 
 class _DummyConfig:

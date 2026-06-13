@@ -43,7 +43,7 @@ class TrayManager(QObject):
         self.status_action.setEnabled(False)
         menu.addSeparator()
 
-        show_action = menu.addAction("📅  今日看板")
+        show_action = menu.addAction("📅  工作看板")
         show_action.triggered.connect(self.show_main_window)
 
         report_action = menu.addAction("📋  生成日报")
@@ -70,6 +70,7 @@ class TrayManager(QObject):
         self.main_window = MainWindow(
             self.config, self.db, self.timer,
             on_generate_report=self.show_report_window,
+            on_open_settings=self.show_settings,
         )
         # Phase B: 注入 ReminderEngine → 初始化待办/提醒 Tab
         if self._reminder_engine:
@@ -290,25 +291,26 @@ class TrayManager(QObject):
             self.main_window.raise_()
             self.main_window.activateWindow()
 
-    def show_report_window(self):
-        today = date.today().isoformat()
-        entries = self.db.get_entries_by_date(today)
+    def show_report_window(self, target_date=None):
+        report_date = target_date or date.today().isoformat()
+        entries = self.db.get_entries_by_date(report_date)
         valid = [e for e in entries if not e.get("skipped") and e.get("content")]
         if not valid:
+            label = "今日" if report_date == date.today().isoformat() else f"{report_date}"
             QMessageBox.information(
                 None,
                 "POMATO",
-                "今日暂无有效记录，请先完成至少一个番茄钟！",
+                f"{label}暂无有效记录，请先完成至少一个番茄钟！",
             )
             return
-        win = ReportWindow(self.config, self.db, self.ai_client)
+        win = ReportWindow(self.config, self.db, self.ai_client, report_date=report_date)
         win.exec()
 
     def show_settings(self):
         SettingsWindow(self.config, reminder_engine=self._reminder_engine).exec()
 
     def show_history_window(self):
-        HistoryWindow(self.db).exec()
+        HistoryWindow(self.db, ai_client=self.ai_client, config=self.config).exec()
 
     # ------------------------------------------------------------------
     # TASK-15/16/17: Reminder popup queue + dialog launchers

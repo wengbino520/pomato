@@ -212,6 +212,14 @@ class Database:
             ).fetchall()
         return [row["date"] for row in rows]
 
+    def get_all_entry_dates(self):
+        """返回所有有番茄钟记录的日期（用于历史窗口展示无日报但有记录的日期）。"""
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT date FROM pomodoro_entries ORDER BY date DESC"
+            ).fetchall()
+        return [row["date"] for row in rows]
+
     def get_today_session_count(self, date_str):
         with self._get_conn() as conn:
             row = conn.execute(
