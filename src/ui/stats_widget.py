@@ -238,6 +238,7 @@ class StatsWidget(QWidget):
 
     def _refresh_bar(self, dt: date):
         self.bar_plot.clear()
+        self.bar_plot.setTitle(None)  # 显式清除上一次的标题
         monday, sunday = _week_range(dt)
         raw = dict(self.db.get_daily_tomato_counts(monday.isoformat(), sunday.isoformat()))
 
@@ -270,6 +271,7 @@ class StatsWidget(QWidget):
 
     def _refresh_trend(self, date_str: str):
         self.line_plot.clear()
+        self.line_plot.setTitle(None)  # 显式清除上一次的标题
         if not date_str:
             return
         dt = date.fromisoformat(date_str)
