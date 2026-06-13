@@ -563,7 +563,7 @@ class MainWindow(QMainWindow):
 
         # Also refresh todo/reminder widgets if available (F7-07 fix)
         if hasattr(self, '_todo_widget'):
-            self._todo_widget.refresh()
+            self._todo_widget.refresh(date_str=date_str)
         if hasattr(self, '_reminder_widget'):
             self._reminder_widget.refresh()
 

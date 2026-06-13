@@ -100,10 +100,15 @@ class TodoListWidget(QWidget):
         self._scroll.setWidget(self._cards_widget)
         layout.addWidget(self._scroll, 1)
 
-    def refresh(self):
-        """从 engine 重新加载待办并重建卡片。"""
-        today = QDate.currentDate().toString("yyyy-MM-dd")
-        todos = self._engine.get_todos(date_str=today, include_done=True)
+    def refresh(self, date_str=None):
+        """从 engine 重新加载待办并重建卡片。
+
+        Args:
+            date_str: ISO 日期字符串。None 则使用今天。
+        """
+        if date_str is None:
+            date_str = QDate.currentDate().toString("yyyy-MM-dd")
+        todos = self._engine.get_todos(date_str=date_str, include_done=True)
 
         # 彻底清空布局（takeAt 立即移除，deleteLater 延迟释放）
         while self._cards_layout.count():
