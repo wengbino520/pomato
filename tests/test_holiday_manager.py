@@ -253,3 +253,25 @@ class TestForceRefresh:
         with patch.object(holiday_mgr, "_fetch_year") as mock_fetch:
             holiday_mgr.force_refresh()
             mock_fetch.assert_called_once_with(date.today().year)
+
+
+# ── 缓存异常场景 (ID-07) ────────────────────────────────────────────────────────
+
+class TestCacheExceptionHandling:
+    """缓存读写异常不崩溃。"""
+
+    def test_save_cache_permission_error_does_not_crash(self, holiday_mgr):
+        """_save_cache 写入失败时记录警告，不抛异常。"""
+        holiday_mgr._cache = {"2026-01-01": {"holiday": True, "name": "元旦"}}
+        with patch("builtins.open", side_effect=PermissionError("Access denied")):
+            holiday_mgr._save_cache()
+        # 不应崩溃
+
+    def test_load_cache_with_list_not_dict(self, tmp_path):
+        """缓存文件内容是 JSON 数组而非对象 → 回退空缓存。"""
+        import json
+        cache_file = tmp_path / "holiday_cache.json"
+        cache_file.write_text(json.dumps([{"holiday": True}]), encoding="utf-8")
+        mgr = HolidayManager(tmp_path)
+        assert mgr._cache == {}
+        assert mgr._last_fetch_year is None

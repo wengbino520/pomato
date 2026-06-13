@@ -33,7 +33,7 @@
 | F7 待办管理 | ✅ 完成 | CRUD、优先级、截止日期、拖拽排序、结转 |
 | F8 定时提醒 | ✅ 完成 | 一次性/重复提醒、延后、弹窗队列 |
 | F9 看板增强 | ✅ 完成 | Tab 式看板（番茄/待办/提醒三合一） |
-| F10 AI日报增强 | ❌ 未实现 | Prompt 注入待办完成情况（设计已完成） |
+| F10 AI日报增强 | ✅ 完成 | Prompt 注入待办完成情况 (FD-02) |
 
 ### 0.3 F7-07（待办关联番茄钟）状态 —— ⚠️ 部分实现
 
@@ -452,8 +452,8 @@ def register(plugin_manager):
 | # | 债务 | 优先级 | 状态 | 方案 |
 |---|------|--------|------|------|
 | FD-01 | F7-07 待办-番茄双向关联 | 🔴 P0 | ✅ 已完成 | `todo_id` 列/回填/UI链路 全通 |
-| FD-02 | F10 AI 日报待办注入 | 🟢 P2 | ❌ 未实现 | Prompt 中注入待办完成情况 |
-| FD-03 | 弹窗上一轮上下文 | 🟢 P2 | ❌ 未实现 | `previous_content` 参数已有，UI 链路待完善 |
+| FD-02 | F10 AI 日报待办注入 | 🟢 P2 | ✅ 已实现 | Prompt 中注入待办完成情况 (`_format_todo_summary()` + `build_prompt()` `todos=` 参数) |
+| FD-03 | 弹窗上一轮上下文 | 🟢 P2 | ✅ 已验证 | `previous_content` + `previous_tags` 完整链路已实现 (app.py → PopupWindow → "重复上一条") |
 
 ### 4.2 代码质量债务
 
@@ -480,9 +480,9 @@ def register(plugin_manager):
 | ID-02 | E2E 测试缺失 | 🟡 P1 | `pytest-qt` 模拟完整工作流 | ✅ 已完成 (22 用例) |
 | ID-03 | SQLite WAL 模式 | 🟡 P1 | `PRAGMA journal_mode=WAL` 一行配置 | ✅ 已完成 |
 | ID-04 | 数据库自动备份 | 🟡 P1 | 每日首次启动时自动备份到 `~/.pomato/backups/` | ✅ 已完成 |
-| ID-05 | CI/CD 自动化构建 | 🟢 P2 | GitHub Actions 多平台矩阵构建 | ❌ 待实现 |
+| ID-05 | CI/CD 自动化构建 | 🟢 P2 | ✅ 已实现 | GitHub Actions 多平台矩阵 (ubuntu/windows, 3.10/3.13) + ruff lint |
 | ID-06 | i18n 国际化 | 🟢 P2 | `gettext`，先英文后日韩 | ❌ 待实现 |
-| ID-07 | 测试覆盖缺口 | 🟢 P2 | `reminder_engine.on_tick()` 调度逻辑、`ai_client` 流式输出、`holiday_manager` 缓存异常 | ❌ 待实现 |
+| ID-07 | 测试覆盖缺口 | 🟢 P2 | ✅ 已完成 | `holiday_manager` 缓存异常、`ai_client` 流式 None delta、待办摘要格式化 |
 
 ### 4.5 硬编码
 
@@ -495,11 +495,11 @@ def register(plugin_manager):
 ### 4.6 偿还进度总结
 
 ```
-✅ 已完成 (15/21): CD-01, CD-02, CD-03, EH-01, EH-02, EH-03, HC-01, HC-02, HC-03, FD-01, ID-01, ID-02, ID-03, ID-04
-🟢 P2 剩余 (6):  ID-05 CI/CD, ID-06 i18n, ID-07 测试覆盖,
-                 FD-02 AI日报增强, FD-03 弹窗上下文
+✅ 已完成 (19/21): CD-01, CD-02, CD-03, EH-01, EH-02, EH-03, HC-01, HC-02, HC-03, FD-01, FD-02, FD-03, ID-01, ID-02, ID-03, ID-04, ID-05, ID-07
+🟢 P2 剩余 (1):  ID-06 i18n
+🟡 P0+P1 剩余 (1):  (无 — 已全部清零)
 ```
-🟢 P2 (下轮): ID-05 CI/CD, ID-06 i18n, ID-07 测试覆盖, FD-02 AI日报增强, FD-03 弹窗上下文
+🟢 P2 (最后一项): ID-06 i18n
 ```
 
 ---

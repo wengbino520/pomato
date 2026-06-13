@@ -28,11 +28,13 @@ class _HistoryAIWorker(QThread):
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
 
-    def __init__(self, ai_client: AIClient, entries: list[dict], report_date: str):
+    def __init__(self, ai_client: AIClient, entries: list[dict], report_date: str,
+                 todos: list[dict] | None = None):
         super().__init__()
         self.ai_client = ai_client
         self.entries = entries
         self.report_date = report_date
+        self.todos = todos or []
 
     def run(self):
         try:
@@ -40,6 +42,7 @@ class _HistoryAIWorker(QThread):
                 self.entries,
                 self.report_date,
                 on_chunk=lambda c: self.chunk_received.emit(c),
+                todos=self.todos if self.todos else None,
             )
             self.finished.emit(result)
         except Exception as exc:
@@ -306,7 +309,8 @@ class HistoryWindow(QDialog):
         self.progress.show()
         self.preview.clear()
 
-        self._worker = _HistoryAIWorker(self.ai_client, valid, self._current_date)
+        self._worker = _HistoryAIWorker(self.ai_client, valid, self._current_date,
+                                        todos=self.db.get_todos(date_str=self._current_date, include_done=True))
         self._worker.chunk_received.connect(self._on_ai_chunk)
         self._worker.finished.connect(self._on_ai_finished)
         self._worker.error.connect(self._on_ai_error)
