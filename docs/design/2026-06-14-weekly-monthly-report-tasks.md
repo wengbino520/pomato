@@ -1,4 +1,4 @@
-# D2 周报/月报生成 开发任务清单
+﻿# D2 周报/月报生成 开发任务清单
 
 > 创建时间: 2026-06-14  
 > 总预估: 3-4 小时（约 7 个子任务）  
@@ -9,7 +9,7 @@
 ## 第一层：零依赖基础设施（可并行）
 
 ### TASK-01: database.py — `get_todos_by_date_range()` + 测试
-- **状态**: ⬜ 未开始
+- **状态**: ✅ 已完成
 - **依赖**: 无
 - **文件**: `src/core/database.py`, `tests/test_database_todos.py`
 - **操作**: 新增方法，参数化查询，返回 `list[dict]`，支持 end_date 日期的未完成任务累积
@@ -17,7 +17,7 @@
 - **预计**: 20 分钟
 
 ### TASK-02: ai_client.py — `build_prompt()` 增加 `period` 参数
-- **状态**: ⬜ 未开始
+- **状态**: ✅ 已完成
 - **依赖**: 无
 - **文件**: `src/services/ai_client.py`, `tests/test_ai_client.py`
 - **操作**: `build_prompt()` 加 `period="daily"` 参数，按 daily/weekly/monthly 生成不同 Prompt 前缀和统计措辞
@@ -29,7 +29,7 @@
 ## 第二层：UI 层（依赖 TASK-01, TASK-02）
 
 ### TASK-03: report_window.py — 周期选择器 + 日期范围标签
-- **状态**: ⬜ 未开始
+- **状态**: ✅ 已完成
 - **依赖**: 无（UI 布局可先行，生成时才需要 DB/API）
 - **文件**: `src/ui/report_window.py`
 - **操作**: 
@@ -41,7 +41,7 @@
 - **预计**: 40 分钟
 
 ### TASK-04: report_window.py — 周期化 AI 生成 + 测试
-- **状态**: ⬜ 未开始
+- **状态**: ✅ 已完成
 - **依赖**: TASK-02, TASK-03
 - **文件**: `src/ui/report_window.py`, `tests/test_report_window.py`
 - **操作**:
@@ -56,7 +56,7 @@
 ## 第三层：集成回归
 
 ### TASK-05: 全量回归
-- **状态**: ⬜ 未开始
+- **状态**: ✅ 已完成
 - **依赖**: TASK-01~04
 - **操作**: `pytest tests/ -v` 确认 0 regression
 - **预计**: 5 分钟
