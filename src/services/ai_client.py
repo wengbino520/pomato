@@ -20,6 +20,15 @@ DEFAULT_SYSTEM_PROMPT = """\
 """
 
 
+def _is_local_url(base_url: str) -> bool:
+    """判断是否为本地 LLM 服务地址（Ollama、LM Studio 等通常无需 API Key）。(HC-03)"""
+    url = str(base_url)
+    return any(
+        url.startswith(prefix)
+        for prefix in ("http://localhost", "http://127.0.0.1", "http://0.0.0.0")
+    )
+
+
 def build_prompt(entries: list[dict], report_date: str | None = None) -> str:
     if not report_date:
         report_date = date.today().strftime("%Y年%m月%d日")
@@ -55,7 +64,7 @@ class AIClient:
         model = self.config.get("api_model", "gpt-4o-mini")
         system_prompt = self.config.get("report_system_prompt", "") or DEFAULT_SYSTEM_PROMPT
 
-        local_ollama = str(base_url).startswith("http://localhost:11434") or str(base_url).startswith("http://127.0.0.1:11434")
+        local_ollama = _is_local_url(base_url)
         if not api_key and not local_ollama:
             raise ValueError("请先在设置中配置 API Key")
 

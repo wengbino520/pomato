@@ -16,6 +16,9 @@ from src.ui.settings_window import SettingsWindow
 
 logger = get_logger(__name__)
 
+# 托盘图标颜色常量 (HC-02)
+_STATE_COLORS = {"idle": "#9e9e9e", "work": "#ef5350", "break": "#66bb6a"}
+
 
 class TrayManager(QObject):
     def __init__(self, app, config, db, timer, reminder_engine=None):
@@ -122,9 +125,7 @@ class TrayManager(QObject):
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        color = {"idle": "#9e9e9e", "work": "#ef5350", "break": "#66bb6a"}.get(
-            state, "#ef5350"
-        )
+        color = _STATE_COLORS.get(state, _STATE_COLORS["work"])
         painter.setBrush(QBrush(QColor(color)))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(2, 2, size - 4, size - 4)
