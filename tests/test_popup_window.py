@@ -17,6 +17,44 @@ from PyQt6.QtWidgets import QApplication
 
 from src.ui.popup_window import PopupWindow
 from src.ui.break_reminder import BreakReminderWindow
+from src.ui.tag_selector_widget import TagSelectorWidget
+
+
+# ═══════════════════════════════════════════════════════════════════
+# TagSelectorWidget 组件测试
+# ═══════════════════════════════════════════════════════════════════
+
+class TestTagSelectorWidget:
+    """TagSelectorWidget 多选按钮组基础功能。"""
+
+    def test_create_empty(self, qapp):
+        ts = TagSelectorWidget(["开发", "测试", "文档"])
+        assert ts.selected_tags() == []
+
+    def test_preselect_tags(self, qapp):
+        ts = TagSelectorWidget(["开发", "测试", "文档"], selected=["开发", "文档"])
+        assert ts.selected_tags() == ["开发", "文档"]
+
+    def test_click_toggles(self, qapp):
+        ts = TagSelectorWidget(["开发", "测试"])
+        ts.tag_buttons["开发"].click()
+        assert "开发" in ts.selected_tags()
+        ts.tag_buttons["开发"].click()
+        assert "开发" not in ts.selected_tags()
+
+    def test_multi_select(self, qapp):
+        ts = TagSelectorWidget(["开发", "测试", "文档"])
+        ts.tag_buttons["开发"].click()
+        ts.tag_buttons["文档"].click()
+        assert ts.selected_tags() == ["开发", "文档"]
+
+    def test_select_tags_ignores_unknown(self, qapp):
+        ts = TagSelectorWidget(["开发", "测试"], selected=["不存在", "开发"])
+        assert ts.selected_tags() == ["开发"]
+
+    def test_tag_list_ordered(self, qapp):
+        ts = TagSelectorWidget(["A", "B", "C"])
+        assert ts.tag_list == ["A", "B", "C"]
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -75,9 +113,9 @@ class TestPopupTagPreselection:
         pw = PopupWindow(2, tmp_config, previous_tags=["开发", "文档"])
         pw.show()
 
-        assert "开发" in pw.selected_tags
-        assert "文档" in pw.selected_tags
-        assert "测试" not in pw.selected_tags
+        assert "开发" in pw._tag_selector.selected_tags()
+        assert "文档" in pw._tag_selector.selected_tags()
+        assert "测试" not in pw._tag_selector.selected_tags()
         pw.close()
 
     def test_empty_previous_tags_no_selection(self, qapp, tmp_config):
@@ -85,7 +123,7 @@ class TestPopupTagPreselection:
         pw = PopupWindow(1, tmp_config, previous_tags=[])
         pw.show()
 
-        assert pw.selected_tags == []
+        assert pw._tag_selector.selected_tags() == []
         pw.close()
 
     def test_previous_tags_none_no_selection(self, qapp, tmp_config):
@@ -93,7 +131,7 @@ class TestPopupTagPreselection:
         pw = PopupWindow(1, tmp_config, previous_tags=None)
         pw.show()
 
-        assert pw.selected_tags == []
+        assert pw._tag_selector.selected_tags() == []
         pw.close()
 
     def test_unknown_tags_ignored(self, qapp, tmp_config):
@@ -101,8 +139,8 @@ class TestPopupTagPreselection:
         pw = PopupWindow(2, tmp_config, previous_tags=["不存在的标签", "开发"])
         pw.show()
 
-        assert "开发" in pw.selected_tags
-        assert "不存在的标签" not in pw.selected_tags
+        assert "开发" in pw._tag_selector.selected_tags()
+        assert "不存在的标签" not in pw._tag_selector.selected_tags()
         pw.close()
 
     def test_multi_tag_selection_via_click(self, qapp, tmp_config):
@@ -111,14 +149,16 @@ class TestPopupTagPreselection:
         pw.show()
 
         # Click first two tags
-        first_tag = pw._tag_list[0]
-        second_tag = pw._tag_list[1]
-        pw.tag_buttons[first_tag].click()
-        pw.tag_buttons[second_tag].click()
+        ts = pw._tag_selector
+        first_tag = ts.tag_list[0]
+        second_tag = ts.tag_list[1]
+        ts.tag_buttons[first_tag].click()
+        ts.tag_buttons[second_tag].click()
 
-        assert first_tag in pw.selected_tags
-        assert second_tag in pw.selected_tags
-        assert len(pw.selected_tags) == 2
+        tags = ts.selected_tags()
+        assert first_tag in tags
+        assert second_tag in tags
+        assert len(tags) == 2
         pw.close()
 
     def test_multi_tag_toggle_off(self, qapp, tmp_config):
@@ -126,16 +166,17 @@ class TestPopupTagPreselection:
         pw = PopupWindow(1, tmp_config)
         pw.show()
 
-        first_tag = pw._tag_list[0]
-        second_tag = pw._tag_list[1]
-        pw.tag_buttons[first_tag].click()
-        pw.tag_buttons[second_tag].click()
-        # Toggle first off
-        pw.tag_buttons[first_tag].click()
+        ts = pw._tag_selector
+        first_tag = ts.tag_list[0]
+        second_tag = ts.tag_list[1]
+        ts.tag_buttons[first_tag].click()
+        ts.tag_buttons[second_tag].click()
+        ts.tag_buttons[first_tag].click()
 
-        assert first_tag not in pw.selected_tags
-        assert second_tag in pw.selected_tags
-        assert len(pw.selected_tags) == 1
+        tags = ts.selected_tags()
+        assert first_tag not in tags
+        assert second_tag in tags
+        assert len(tags) == 1
         pw.close()
 
 
@@ -184,9 +225,9 @@ class TestPopupKeyboardShortcuts:
         pw = PopupWindow(1, tmp_config)
         pw.show()
 
-        assert pw._tag_list
-        first_tag = pw._tag_list[0]
-        assert first_tag not in pw.selected_tags
+        ts = pw._tag_selector
+        first_tag = ts.tag_list[0]
+        assert first_tag not in ts.selected_tags()
 
         # Trigger Ctrl+1
         from PyQt6.QtGui import QShortcut
@@ -195,7 +236,7 @@ class TestPopupKeyboardShortcuts:
                 child.activated.emit()
                 break
 
-        assert first_tag in pw.selected_tags
+        assert first_tag in ts.selected_tags()
         pw.close()
 
     def test_ctrl_9_on_fewer_tags_is_safe(self, qapp, tmp_config):

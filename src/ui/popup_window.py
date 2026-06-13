@@ -13,6 +13,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from src.ui.todo_link_widget import TodoLinkWidget
+from src.ui.tag_selector_widget import TagSelectorWidget
+
 from src.services.logger import get_logger
 
 logger = get_logger(__name__)
@@ -32,7 +35,7 @@ class PopupWindow(QDialog):
         self._reminder_engine = reminder_engine
         self.previous_content = (previous_content or "").strip()
         self.previous_tags = previous_tags or []
-        self.selected_tags: list[str] = []
+        self._tag_selector: TagSelectorWidget | None = None
         self.timeout_seconds = max(10, int(self.config.get("popup_timeout_seconds", 180)))
         self._timeout_timer = QTimer(self)
         self._timeout_timer.setSingleShot(True)
@@ -114,21 +117,9 @@ class PopupWindow(QDialog):
         tag_label.setStyleSheet("font-size: 12px; color: #666;")
         layout.addWidget(tag_label)
 
-        tags_widget = QWidget()
-        tags_layout = QHBoxLayout(tags_widget)
-        tags_layout.setContentsMargins(0, 0, 0, 0)
-        tags_layout.setSpacing(6)
-
-        self.tag_buttons: dict[str, QPushButton] = {}
-        for tag in self.config.get("custom_tags", ["开发", "测试", "文档", "会议", "研究", "其他"]):
-            btn = QPushButton(tag)
-            btn.setStyleSheet(self._tag_style(False))
-            btn.clicked.connect(lambda _checked, t=tag, b=btn: self._toggle_tag(t, b))
-            tags_layout.addWidget(btn)
-            self.tag_buttons[tag] = btn
-        self._tag_list = list(self.tag_buttons.keys())  # US-03: shortcut index → tag name
-        tags_layout.addStretch()
-        layout.addWidget(tags_widget)
+        tag_names = self.config.get("custom_tags", ["开发", "测试", "文档", "会议", "研究", "其他"])
+        self._tag_selector = TagSelectorWidget(tag_names, selected=self.previous_tags, parent=self)
+        layout.addWidget(self._tag_selector)
 
         # ---- 关联待办 (CD-01: extracted TodoLinkWidget) ----
         from src.ui.todo_link_widget import TodoLinkWidget
@@ -210,41 +201,11 @@ class PopupWindow(QDialog):
                 self._make_toggle_handler(i)
             )
 
-        # US-02: 上一轮标签自动预选
-        self._apply_tag_recommendations()
-
         self.text_edit.setFocus()
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
-
-    @staticmethod
-    def _tag_style(selected: bool) -> str:
-        if selected:
-            return (
-                "QPushButton {"
-                "  background:#ef5350; color:white;"
-                "  border:1.5px solid #ef5350; border-radius:12px;"
-                "  padding:3px 10px; font-size:12px;"
-                "}"
-            )
-        return (
-            "QPushButton {"
-            "  background:white; color:#555;"
-            "  border:1.5px solid #ddd; border-radius:12px;"
-            "  padding:3px 10px; font-size:12px;"
-            "}"
-            "QPushButton:hover { border-color:#ef5350; color:#ef5350; }"
-        )
-
-    def _toggle_tag(self, tag: str, btn: QPushButton):
-        if tag in self.selected_tags:
-            self.selected_tags.remove(tag)
-            btn.setStyleSheet(self._tag_style(False))
-        else:
-            self.selected_tags.append(tag)
-            btn.setStyleSheet(self._tag_style(True))
 
     def _on_submit(self):
         self._timeout_timer.stop()
@@ -258,8 +219,8 @@ class PopupWindow(QDialog):
         todo_id, mark_done = self._todo_link.get_todo_info()
         if todo_id and mark_done and self._reminder_engine:
             self._reminder_engine.update_todo(todo_id, status="done")
-        logger.info("Popup submitted: session=%d, tags=%s, todo_id=%d", self.session_no, self.selected_tags, todo_id)
-        self.submitted.emit(content, list(self.selected_tags), todo_id)
+        logger.info("Popup submitted: session=%d, tags=%s, todo_id=%d", self.session_no, self._tag_selector.selected_tags(), todo_id)
+        self.submitted.emit(content, self._tag_selector.selected_tags(), todo_id)
         self.accept()
 
     def _on_skip(self):
@@ -280,40 +241,25 @@ class PopupWindow(QDialog):
             self.text_edit.setPlainText(self.previous_content)
             self.text_edit.setFocus()
             self.text_edit.moveCursor(QTextCursor.MoveOperation.End)
-        if self.previous_tags:
-            for tag in self.previous_tags:
-                if tag in self.tag_buttons:
-                    btn = self.tag_buttons[tag]
-                    if tag not in self.selected_tags:
-                        self.selected_tags.append(tag)
-                    btn.setStyleSheet(self._tag_style(True))
+        if self.previous_tags and self._tag_selector:
+            self._tag_selector.select_tags(self.previous_tags)
 
     # ── US-03 快捷键辅助 ────────────────────────────────────
 
     def _make_toggle_handler(self, index: int):
         """Return a callable that toggles the tag at 1-based `index`."""
         def handler():
+            ts = self._tag_selector
+            if ts is None:
+                return
             idx = index - 1
-            if 0 <= idx < len(self._tag_list):
-                tag = self._tag_list[idx]
-                btn = self.tag_buttons[tag]
-                self._toggle_tag(tag, btn)
+            if 0 <= idx < len(ts.tag_list):
+                tag = ts.tag_list[idx]
+                btn = ts.tag_buttons[tag]
+                ts._toggle(tag, btn)
         return handler
 
-    # ── US-02 标签预选 ──────────────────────────────────────
-
-    def _apply_tag_recommendations(self):
-        """Auto-select tags from the previous valid entry."""
-        for tag in self.previous_tags:
-            if tag in self.tag_buttons and tag not in self.selected_tags:
-                self.selected_tags.append(tag)
-                self.tag_buttons[tag].setStyleSheet(self._tag_style(True))
-        if self.previous_tags:
-            logger.debug("Auto-selected previous tags: %s", self.previous_tags)
-
-    # ------------------------------------------------------------------
-    # Public: bring to foreground
-    # ------------------------------------------------------------------
+    # ── Public: bring to foreground ─────────────────────────
 
     def show_and_focus(self):
         self._timeout_timer.start(self.timeout_seconds * 1000)

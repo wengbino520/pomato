@@ -108,9 +108,9 @@ class TestPomodoroFullCycle:
                 # 模拟填写内容
                 popup.text_edit.setPlainText("完成 E2E 测试框架搭建")
                 # 模拟点击标签 "测试"
-                btn = popup.tag_buttons["测试"]
-                btn.setChecked(True)
-                popup._toggle_tag("测试", btn)
+                ts = popup._tag_selector
+                btn = ts.tag_buttons["测试"]
+                ts._toggle("测试", btn)
 
                 # 提交
                 with qtbot.waitSignal(popup.submitted, timeout=2000) as blocker:
@@ -350,9 +350,9 @@ class TestPopupTimeout:
         popup = PopupWindow(1, _DummyConfig())
         qtbot.addWidget(popup)
 
-        assert "开发" in popup.tag_buttons
-        assert "测试" in popup.tag_buttons
-        assert "文档" in popup.tag_buttons
+        assert "开发" in popup._tag_selector.tag_buttons
+        assert "测试" in popup._tag_selector.tag_buttons
+        assert "文档" in popup._tag_selector.tag_buttons
 
     def test_popup_skip_signal(self, qapp, qtbot):
         """点击跳过 → skipped 信号发射。"""

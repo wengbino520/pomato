@@ -29,6 +29,7 @@ from src.ui.history_window import HistoryWindow
 from src.ui.todo_list_widget import TodoListWidget
 from src.ui.reminder_list_widget import ReminderListWidget
 from src.ui.stats_widget import StatsWidget
+from src.ui.tag_selector_widget import TagSelectorWidget
 
 logger = get_logger(__name__)
 
@@ -80,15 +81,11 @@ class EditEntryDialog(QDialog):
         layout.addWidget(self.text_edit)
 
         # ---- 标签 ----
-        self.tags_combo = QComboBox()
-        self.tags_combo.setEditable(True)
-        self.tags_combo.addItem("")
-        for tag in avail_tags:
-            self.tags_combo.addItem(tag)
-        self.tags_combo.setCurrentText(", ".join(entry.get("tags") or []))
-        self.tags_combo.setPlaceholderText("可输入多个标签，逗号分隔")
-        layout.addWidget(QLabel("标签："))
-        layout.addWidget(self.tags_combo)
+        layout.addWidget(QLabel("标签（可多选）："))
+        self._tag_selector = TagSelectorWidget(
+            avail_tags, selected=entry.get("tags") or [], parent=self
+        )
+        layout.addWidget(self._tag_selector)
 
         # ---- 关联待办 (CD-01: extracted TodoLinkWidget) ----
         from src.ui.todo_link_widget import TodoLinkWidget
@@ -118,7 +115,7 @@ class EditEntryDialog(QDialog):
         start = f"{self.start_hour.value():02d}:{self.start_minute.value():02d}:00"
         end = f"{self.end_hour.value():02d}:{self.end_minute.value():02d}:00"
         content = self.text_edit.toPlainText().strip()
-        tags = [t.strip() for t in self.tags_combo.currentText().split(",") if t.strip()]
+        tags = self._tag_selector.selected_tags()
         return start, end, content, tags
 
     def get_todo_info(self) -> tuple[int, bool]:
@@ -177,15 +174,9 @@ class AddEntryDialog(QDialog):
         self.content_edit.setMinimumHeight(90)
         layout.addWidget(self.content_edit)
 
-        layout.addWidget(QLabel("标签："))
-        self.tags_combo = QComboBox()
-        self.tags_combo.setEditable(True)
-        self.tags_combo.addItem("")
-        for tag in tags:
-            self.tags_combo.addItem(tag)
-        self.tags_combo.setCurrentIndex(0)
-        self.tags_combo.setPlaceholderText("可输入多个标签，逗号分隔")
-        layout.addWidget(self.tags_combo)
+        layout.addWidget(QLabel("标签（可多选）："))
+        self._tag_selector = TagSelectorWidget(tags, parent=self)
+        layout.addWidget(self._tag_selector)
 
         # ---- 关联待办 (CD-01: extracted TodoLinkWidget) ----
         from src.ui.todo_link_widget import TodoLinkWidget
@@ -216,8 +207,7 @@ class AddEntryDialog(QDialog):
         start = f"{self.start_hour.value():02d}:{self.start_minute.value():02d}:00"
         end = f"{self.end_hour.value():02d}:{self.end_minute.value():02d}:00"
         content = self.content_edit.toPlainText().strip()
-        raw_tags = self.tags_combo.currentText().strip()
-        tags = [t.strip() for t in raw_tags.split(",") if t.strip()]
+        tags = self._tag_selector.selected_tags()
         return start, end, content, tags
 
     def get_todo_info(self) -> tuple[int, bool]:
