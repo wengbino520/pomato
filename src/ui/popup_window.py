@@ -263,12 +263,6 @@ class PopupWindow(QDialog):
                         self.selected_tags.append(tag)
                     btn.setStyleSheet(self._tag_style(True))
 
-    def _on_timeout(self):
-        if not self.isVisible():
-            return
-        self.timed_out.emit()
-        self.reject()
-
     # ------------------------------------------------------------------
     # Public: bring to foreground
     # ------------------------------------------------------------------
