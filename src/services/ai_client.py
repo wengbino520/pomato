@@ -58,13 +58,23 @@ def _is_local_url(base_url: str) -> bool:
 
 
 def build_prompt(entries: list[dict], report_date: str | None = None,
-                 todos: list[dict] | None = None) -> str:
+                 todos: list[dict] | None = None, period: str = "daily") -> str:
     if not report_date:
         report_date = date.today().strftime("%Y年%m月%d日")
 
     valid = [e for e in entries if not e.get("skipped") and e.get("content")]
 
-    lines = [f"日期：{report_date}", "", "番茄钟记录："]
+    # Period-specific header
+    period_labels = {"daily": "今日", "weekly": "本周", "monthly": "本月"}
+    period_label = period_labels.get(period, "今日")
+
+    lines = []
+    if period == "daily":
+        lines.append(f"日期：{report_date}")
+    else:
+        lines.append(f"周期：{report_date}（{period_label}）")
+
+    lines.extend(["", "番茄钟记录："])
     for e in valid:
         tags = ", ".join(e.get("tags") or [])
         tag_str = f"[{tags}] " if tags else ""
@@ -73,7 +83,7 @@ def build_prompt(entries: list[dict], report_date: str | None = None,
         )
 
     lines.append(
-        f"\n共完成 {len(valid)} 个番茄钟，约 {len(valid) * 25} 分钟专注工作。"
+        f"\n{period_label}共完成 {len(valid)} 个番茄钟，约 {len(valid) * 25} 分钟专注工作。"
     )
 
     # FD-02: 注入待办完成情况
@@ -94,6 +104,7 @@ class AIClient:
         report_date: str | None = None,
         on_chunk=None,
         todos: list[dict] | None = None,
+        period: str = "daily",
     ) -> str:
         api_key = self.config.get("api_key", "")
         base_url = self.config.get("api_base_url", "https://api.openai.com/v1")
@@ -108,7 +119,7 @@ class AIClient:
         if api_key:
             client_kwargs["api_key"] = api_key
         client = OpenAI(**client_kwargs)
-        prompt = build_prompt(entries, report_date, todos=todos)
+        prompt = build_prompt(entries, report_date, todos=todos, period=period)
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},

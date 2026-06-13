@@ -338,6 +338,51 @@ class TestFormatTodoSummary:
         assert "A" in result
         assert "B" in result
 
+
+# ── D2: build_prompt period 参数 ────────────────────────────────────────────────
+
+class TestBuildPromptPeriod:
+    """build_prompt() period 参数控制周报/月报 Prompt 差异。"""
+
+    def test_daily_uses_today_wording(self):
+        entry = make_entry(content="开发")
+        prompt = build_prompt([entry], period="daily")
+        assert "日期：" in prompt
+        assert "今日共完成" in prompt or "共完成" in prompt
+
+    def test_weekly_uses_period_range(self):
+        entry = make_entry(content="开发")
+        prompt = build_prompt([entry], period="weekly",
+                              report_date="2026-06-14")
+        assert "周期：" in prompt
+        assert "本周共完成" in prompt
+
+    def test_monthly_uses_period_range(self):
+        entry = make_entry(content="开发")
+        prompt = build_prompt([entry], period="monthly",
+                              report_date="2026-06-14")
+        assert "周期：" in prompt
+        assert "本月共完成" in prompt
+
+    def test_period_defaults_to_daily(self):
+        """不传 period 时向后兼容，行为等同 daily。"""
+        entry = make_entry(content="开发")
+        prompt_default = build_prompt([entry])
+        prompt_explicit = build_prompt([entry], period="daily")
+        assert prompt_default == prompt_explicit
+
+    def test_weekly_prompt_has_different_structure(self):
+        """周报 Prompt 结构与日报不同（含周范围信息）。"""
+        entries = [make_entry(session_no=i, content=f"任务{i}")
+                   for i in range(1, 4)]
+        daily = build_prompt(entries, period="daily")
+        weekly = build_prompt(entries, period="weekly",
+                              report_date="2026-06-14")
+        # 周报包含本周范围
+        assert "周" in weekly or "本周" in weekly
+        # 日报和周报的统计措辞不同
+        assert "今日" in daily or "日期" in daily
+
     def test_mixed_status_shows_both(self):
         todos = [
             make_todo(1, "已完成", "done"),
