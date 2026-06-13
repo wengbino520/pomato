@@ -199,3 +199,62 @@ class TestEdgeCases:
         long_title = "A" * 500
         tid = tmp_db.add_todo(long_title)
         assert len(tmp_db.get_todo(tid)["title"]) == 500
+
+
+class TestGetTodosByDateRange:
+    """D2: get_todos_by_date_range() 按日期范围返回待办。"""
+
+    def test_returns_todos_in_range(self, tmp_db):
+        tmp_db.add_todo("周一事", todo_date="2026-06-01")
+        tmp_db.add_todo("周三事", todo_date="2026-06-03")
+        tmp_db.add_todo("周五事", todo_date="2026-06-05")
+        tmp_db.add_todo("上周日", todo_date="2026-05-31")  # 范围外
+        tmp_db.add_todo("范围外后", todo_date="2026-06-08")  # 范围外
+
+        result = tmp_db.get_todos_by_date_range("2026-06-01", "2026-06-07")
+        titles = [t["title"] for t in result]
+        assert "周一事" in titles
+        assert "周三事" in titles
+        assert "周五事" in titles
+        assert "上周日" not in titles
+        assert "范围外后" not in titles
+
+    def test_empty_range_returns_empty(self, tmp_db):
+        tmp_db.add_todo("测试", todo_date="2026-06-01")
+        result = tmp_db.get_todos_by_date_range("2025-01-01", "2025-01-05")
+        assert result == []
+
+    def test_includes_done_todos(self, tmp_db):
+        tid = tmp_db.add_todo("已完成", todo_date="2026-06-03")
+        tmp_db.update_todo(tid, status="done")
+        result = tmp_db.get_todos_by_date_range("2026-06-01", "2026-06-07")
+        assert any(t["title"] == "已完成" and t["status"] == "done" for t in result)
+
+    def test_accumulates_uncompleted_when_end_is_today(self, tmp_db):
+        """end_date 为今天时，纳入历史未完成待办（与 get_todos 今日逻辑一致）。"""
+        from datetime import date as dt_date, timedelta
+
+        today = dt_date.today()
+        monday = today - timedelta(days=today.weekday())
+        sunday = monday + timedelta(days=6)
+        long_ago = (today - timedelta(days=30)).isoformat()
+
+        # 插入一个很久以前的未完成待办
+        tmp_db.add_todo("旧未完成", todo_date=long_ago)
+        # 插入一个很久以前但已完成的待办
+        tid_done = tmp_db.add_todo("旧已完成", todo_date=long_ago)
+        tmp_db.update_todo(tid_done, status="done")
+
+        result = tmp_db.get_todos_by_date_range(monday.isoformat(), sunday.isoformat())
+
+        titles = [t["title"] for t in result]
+        # 本周范围内没有待办 → 只有历史未完成的会被累积进来
+        assert "旧未完成" in titles
+        # "旧已完成" 不应出现（已完成的历史待办不累积）
+        assert "旧已完成" not in titles
+
+    def test_no_accumulation_when_end_not_today(self, tmp_db):
+        """end_date 不是今天时，不纳入历史未完成待办。"""
+        tmp_db.add_todo("历史待办", todo_date="2026-06-01")
+        result = tmp_db.get_todos_by_date_range("2026-06-08", "2026-06-13")
+        assert result == []

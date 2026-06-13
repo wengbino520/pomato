@@ -434,6 +434,34 @@ class Database:
                     ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_todos_by_date_range(self, start_date: str, end_date: str):
+        """Return todos for a date range (D2: weekly/monthly reports).
+
+        If end_date is today, also include uncompleted todos from before
+        start_date (same accumulation logic as get_todos for today).
+        """
+        from datetime import date as dt_date
+        today_str = dt_date.today().isoformat()
+        is_current = (end_date == today_str)
+
+        with self._get_conn() as conn:
+            if is_current:
+                rows = conn.execute(
+                    """SELECT * FROM todos
+                       WHERE (todo_date BETWEEN ? AND ?)
+                          OR (todo_date < ? AND status != 'done')
+                       ORDER BY priority DESC, sort_order ASC""",
+                    (start_date, end_date, start_date),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT * FROM todos
+                       WHERE todo_date BETWEEN ? AND ?
+                       ORDER BY priority DESC, sort_order ASC""",
+                    (start_date, end_date),
+                ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_todo(self, todo_id):
         with self._get_conn() as conn:
             row = conn.execute(
