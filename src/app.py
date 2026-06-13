@@ -10,6 +10,7 @@ from src.services.logger import get_logger
 from src.ui.history_window import HistoryWindow
 from src.ui.main_window import MainWindow
 from src.ui.popup_window import PopupWindow
+from src.ui.break_reminder import BreakReminderWindow
 from src.ui.reminder_popup import ReminderPopup
 from src.ui.report_window import ReportWindow
 from src.ui.settings_window import SettingsWindow
@@ -34,6 +35,7 @@ class TrayManager(QObject):
         self.main_window: MainWindow | None = None
         self._active_popup: PopupWindow | ReminderPopup | None = None
         self._popup_queue: deque[ReminderPopup] = deque(maxlen=2)
+        self._break_reminder: BreakReminderWindow | None = None
 
     # ------------------------------------------------------------------
     # Setup
@@ -178,12 +180,12 @@ class TrayManager(QObject):
     @pyqtSlot(bool)
     def _on_break_ended(self, is_long: bool):
         self.tray.setIcon(self._make_icon("work"))
-        self.tray.showMessage(
-            "POMATO",
-            "休息结束，开始新的番茄钟！💪",
-            QSystemTrayIcon.MessageIcon.Information,
-            3000,
-        )
+        # US-04: 淡入提醒窗替代系统 toast
+        if self._break_reminder is not None:
+            self._break_reminder.close()
+            self._break_reminder.deleteLater()
+        self._break_reminder = BreakReminderWindow()
+        self._break_reminder.show_with_fade_in()
 
     @pyqtSlot(int, str)
     def _on_tick(self, remaining: int, label: str):
