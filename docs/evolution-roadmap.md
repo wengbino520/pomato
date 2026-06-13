@@ -45,15 +45,13 @@
 | `PopupWindow` 关联待办下拉 | ✅ | TASK-21 完成，弹窗可选待办 + 标记完成 |
 | `AddEntryDialog` 关联待办 | ✅ | 手动补录时可选待办 |
 | `TrayManager._show_popup` 链路 | ✅ | 提交时调用 `update_todo(pomodoro_id=entry_id)` |
-| `pomodoro_entries.todo_id` 列 | ❌ | **缺失**：番茄条目侧无反向引用 |
-| `add_entry()` 接受 `todo_id` | ❌ | **缺失**：入库时不存待办关联 |
-| `get_entries_by_date()` JOIN | ❌ | **缺失**：查询时不带回关联待办信息 |
-| `EntryItem` 显示关联待办 | ❌ | **缺失**：时间轴中看不到该条目属于哪个待办 |
-| `EditEntryDialog` 关联待办 | ❌ | **缺失**：编辑条目时无法查看/修改关联 |
+| `pomodoro_entries.todo_id` 列 | ✅ | `_init_db()` migration + 回填 |
+| `add_entry()` 接受 `todo_id` | ✅ | 完整链路：弹窗 / 补录 / 编辑 |
+| `get_entries_by_date()` JOIN | ✅ | LEFT JOIN todos 带回 `todo_id` + `todo_title` |
+| `EntryItem` 显示关联待办 | ✅ | 时间轴中显示 `📋 {todo_title}` 标签 |
+| `EditEntryDialog` 关联待办 | ✅ | TodoLinkWidget 复用组件，编辑可修改关联 |
 
-**问题本质**：数据模型是**单向的**，仅在 `todos` 表侧存储 `pomodoro_id`，但 `pomodoro_entries` 表无法回溯到待办。这导致时间轴中看不出每条记录属于哪个待办，F7-07 的原始需求"某条记录属于哪个待办"未完全满足。
-
-**修复方案见 Phase C → C1**。
+**状态**：✅ F7-07 双向关联已全部实现（DB 层 4 方法 + UI 3 组件 + app 链路线 + 20+ 测试覆盖）。
 
 ---
 
@@ -65,73 +63,9 @@
 
 ---
 
-### C1：完善 F7-07 待办-番茄双向关联 🔴 P0
+### C1：完善 F7-07 待办-番茄双向关联  ✅ 已完成
 
-**问题**: 如上 0.3 节所述，关联是单向的。
-
-**方案**:
-
-#### Step 1: 数据库变更
-
-```sql
--- pomodoro_entries 增加 todo_id 列（可为 NULL）
-ALTER TABLE pomodoro_entries ADD COLUMN todo_id INTEGER 
-    REFERENCES todos(id) ON DELETE SET NULL;
-
--- 从 todos 表回填已有数据
-UPDATE pomodoro_entries SET todo_id = (
-    SELECT t.id FROM todos t WHERE t.pomodoro_id = pomodoro_entries.id
-) WHERE EXISTS (
-    SELECT 1 FROM todos t WHERE t.pomodoro_id = pomodoro_entries.id
-);
-```
-
-#### Step 2: `database.py` 方法增强
-
-| 方法 | 改动 |
-|------|------|
-| `add_entry()` | 新增参数 `todo_id=None`，写入 INSERT |
-| `update_entry()` | 新增参数 `todo_id=None`，支持修改关联 |
-| `get_entries_by_date()` | LEFT JOIN todos 带回 `todo_id` + `todo_title` |
-| `get_entry()` (新增) | 单条查询，带回关联待办 |
-
-```python
-def add_entry(self, date_str, session_no, start_time, end_time,
-              content, tags=None, skipped=False, todo_id=None):
-    # ... INSERT 中增加 todo_id 字段
-    # ...
-
-def get_entries_by_date(self, date_str):
-    # 增加 LEFT JOIN
-    rows = conn.execute("""
-        SELECT e.*, t.title AS todo_title
-        FROM pomodoro_entries e
-        LEFT JOIN todos t ON e.todo_id = t.id
-        WHERE e.date = ?
-        ORDER BY e.start_time, e.end_time
-    """, (date_str,)).fetchall()
-```
-
-#### Step 3: UI 增强
-
-| 文件 | 改动 |
-|------|------|
-| `EntryItem` | 在标签行后显示关联待办名称（`📋 接口文档`），点击可跳转到待办 Tab |
-| `EditEntryDialog` | 复用 `AddEntryDialog` 的关联待办下拉逻辑，编辑时可修改关联 |
-| `PopupWindow` | 提交时传 `todo_id` 到 `add_entry()`（当前仅更新 todo 侧） |
-| `AddEntryDialog` | 补录时传 `todo_id` 到 `add_entry()` |
-
-#### Step 4: `app.py` 链路更新
-
-```python
-# _show_popup → on_submitted
-def on_submitted(content, tags, todo_id=0):
-    entry_id = self.db.add_entry(..., todo_id=todo_id if todo_id else None)
-    if todo_id and entry_id and self._reminder_engine:
-        self._reminder_engine.update_todo(todo_id, pomodoro_id=entry_id, status="done")
-```
-
-**预估**: 3-4 小时，影响 5 个文件
+**状态**: 已于 Phase B 完成 — DB 层 `todo_id` 列/回填/LEFT JOIN，UI 层 EntryItem 显示 + 编辑关联，app 链路弹窗/补录 `todo_id` 传递，20+ 测试覆盖。
 
 ---
 
@@ -495,11 +429,9 @@ def register(plugin_manager):
 ### 4.6 偿还进度总结
 
 ```
-✅ 已完成 (19/21): CD-01, CD-02, CD-03, EH-01, EH-02, EH-03, HC-01, HC-02, HC-03, FD-01, FD-02, FD-03, ID-01, ID-02, ID-03, ID-04, ID-05, ID-07
+✅ 已完成 (20/21): CD-01, CD-02, CD-03, EH-01, EH-02, EH-03, HC-01, HC-02, HC-03, FD-01, FD-02, FD-03, ID-01, ID-02, ID-03, ID-04, ID-05, ID-07
 🟢 P2 剩余 (1):  ID-06 i18n
-🟡 P0+P1 剩余 (1):  (无 — 已全部清零)
-```
-🟢 P2 (最后一项): ID-06 i18n
+🟡 P0+P1 剩余:  无 — 已全部清零
 ```
 
 ---
@@ -530,21 +462,21 @@ gantt
     E3 团队版              :e3, after e1, 60d
 ```
 
-| 里程碑 | 版本 | 核心交付 | 预估日期 |
-|--------|------|----------|----------|
-| M1 | v2.1 | F7-07 双向关联 + AI 日报增强 | 2026-06-20 |
-| M2 | v2.2 | 可视化看板 + 弹窗优化 | 2026-06-26 |
-| M3 | v2.3 | 周报月报 + 项目管理 | 2026-07-10 |
-| M4 | v2.4 | 数据同步 + 插件系统 | 2026-07-25 |
-| M5 | v3.0 | 本地 AI 深度集成 | 2026-Q3 |
-| M6 | v3.5 | 跨平台 + 移动端 | 2026-Q4 |
-| M7 | v4.0 | 团队版 MVP | 2027-Q1 |
+| 里程碑 | 版本 | 核心交付 | 预估日期 | 状态 |
+|--------|------|----------|----------|------|
+| M1 | v2.1 | F7-07 双向关联 + AI 日报增强 | 2026-06-20 | ✅ 提前完成 (6/14) |
+| M2 | v2.2 | 可视化看板 + 弹窗优化 | 2026-06-26 | ⬜ 下一步 |
+| M3 | v2.3 | 周报月报 + 项目管理 | 2026-07-10 | ⬜ |
+| M4 | v2.4 | 数据同步 + 插件系统 | 2026-07-25 | ⬜ |
+| M5 | v3.0 | 本地 AI 深度集成 | 2026-Q3 | ⬜ |
+| M6 | v3.5 | 跨平台 + 移动端 | 2026-Q4 | ⬜ |
+| M7 | v4.0 | 团队版 MVP | 2027-Q1 | ⬜ |
 
 ---
 
-## 附录 A：F7-07 修复详细清单
+## 附录 A：F7-07 修复详细清单 ✅ 全部完成
 
-> 此附录可作为独立任务清单，优先执行。
+> ~~此附录可作为独立任务清单，优先执行。~~ C1 已全部实现。
 
 ### A.1 文件改动清单
 
