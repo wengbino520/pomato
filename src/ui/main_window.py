@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
 )
 
 from src.services.logger import get_logger
+from src.ui.styles import COLORS, STYLES, btn_style
 from src.ui.history_window import HistoryWindow
 from src.ui.todo_list_widget import TodoListWidget
 from src.ui.reminder_list_widget import ReminderListWidget
@@ -336,15 +337,13 @@ class MainWindow(QMainWindow):
         self.timer.state_changed.connect(self._on_timer_state_changed)
 
     # ------------------------------------------------------------------
-    # UI construction
+    # UI construction (CD-02: split into 4 builder methods)
     # ------------------------------------------------------------------
 
     def _setup_ui(self):
         self.setWindowTitle("POMATO 番茄日志")
         self.setMinimumSize(600, 460)
         self.resize(1200, 742)
-
-        # 居中显示
         qr = self.frameGeometry()
         cp = self.screen().availableGeometry().center()
         qr.moveCenter(cp)
@@ -356,9 +355,17 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── top header bar ─────────────────────────────────────────────
+        root.addWidget(self._build_header())
+        root.addWidget(self._build_stats_bar())
+        root.addWidget(self._build_tabs(), 1)
+        root.addWidget(self._build_bottom_bar())
+
+        self.timer.tick.connect(self._on_timer_tick)
+
+    def _build_header(self) -> QWidget:
+        """顶部栏：标题 + 日期导航 + 日历 (CD-02)。"""
         header = QWidget()
-        header.setStyleSheet("background:#ef5350;")
+        header.setStyleSheet(STYLES["header_bar"])
         header.setFixedHeight(56)
         hl = QHBoxLayout(header)
         hl.setContentsMargins(16, 8, 16, 8)
@@ -366,21 +373,14 @@ class MainWindow(QMainWindow):
         title = QLabel("🍅 POMATO")
         title.setStyleSheet("color:white; font-size:18px; font-weight:bold;")
 
-        # ── day navigation arrows ──
-        arrow_style = (
-            "QPushButton { background:transparent; color:white; border:none;"
-            "  font-size:16px; padding:4px 6px; }"
-            "QPushButton:hover { background:rgba(255,255,255,0.2); border-radius:4px; }"
-        )
-
         prev_day_btn = QPushButton("◀")
         prev_day_btn.setFixedSize(30, 30)
-        prev_day_btn.setStyleSheet(arrow_style)
+        prev_day_btn.setStyleSheet(STYLES["arrow_btn"])
         prev_day_btn.clicked.connect(self._prev_day)
 
         next_day_btn = QPushButton("▶")
         next_day_btn.setFixedSize(30, 30)
-        next_day_btn.setStyleSheet(arrow_style)
+        next_day_btn.setStyleSheet(STYLES["arrow_btn"])
         next_day_btn.clicked.connect(self._next_day)
 
         self.view_date_edit = QDateEdit()
@@ -389,7 +389,8 @@ class MainWindow(QMainWindow):
         self.view_date_edit.setDate(QDate.currentDate())
         self.view_date_edit.setFixedWidth(148)
         self.view_date_edit.setStyleSheet(
-            "QDateEdit { background:white; color:#333; border:none; border-radius:4px; padding:4px 10px; padding-right:24px; }"
+            "QDateEdit { background:white; color:#333; border:none; border-radius:4px;"
+            "  padding:4px 10px; padding-right:24px; }"
         )
         self.view_date_edit.dateChanged.connect(self._on_view_date_changed)
         calendar = self.view_date_edit.calendarWidget()
@@ -397,20 +398,23 @@ class MainWindow(QMainWindow):
             calendar.setMinimumSize(420, 320)
             calendar.setGridVisible(True)
             calendar.setStyleSheet(
-                "QCalendarWidget QWidget { background:#ef5350; }"
-                "QCalendarWidget QToolButton { color:white; background:#ef5350; border:none; min-height:28px; min-width:28px; }"
-                "QCalendarWidget QToolButton:hover { background:#d84343; }"
+                f"QCalendarWidget QWidget {{ background:{COLORS['primary']}; }}"
+                f"QCalendarWidget QToolButton {{ color:white; background:{COLORS['primary']};"
+                f"  border:none; min-height:28px; min-width:28px; }}"
+                f"QCalendarWidget QToolButton:hover {{ background:{COLORS['primary_dark']}; }}"
                 "QCalendarWidget QAbstractSpinBox { min-width: 92px; padding: 2px 6px; }"
                 "QCalendarWidget QSpinBox { min-width: 92px; }"
                 "QCalendarWidget QMenu { background:white; }"
             )
 
         today_btn = QPushButton("今天")
-        today_btn.setStyleSheet(self._btn_style("#757575"))
+        today_btn.setStyleSheet(STYLES["btn_grey"])
         today_btn.clicked.connect(self._jump_to_today)
 
         self.date_label = QLabel()
-        self.date_label.setStyleSheet("color:rgba(255,255,255,0.85); font-size:13px;")
+        self.date_label.setStyleSheet(
+            f"color:{COLORS['white_translucent']}; font-size:13px;"
+        )
 
         hl.addWidget(title)
         hl.addStretch()
@@ -419,55 +423,46 @@ class MainWindow(QMainWindow):
         hl.addWidget(next_day_btn)
         hl.addWidget(today_btn)
         hl.addWidget(self.date_label)
-        root.addWidget(header)
+        return header
 
-        # ── stats bar ──────────────────────────────────────────────────
+    def _build_stats_bar(self) -> QWidget:
+        """统计栏：番茄计数 + 专注时长 + 计时器状态 (CD-02)。"""
         stats = QWidget()
-        stats.setStyleSheet(
-            "background:#fff3e0; border-bottom:1px solid #ffe0b2;"
-        )
+        stats.setStyleSheet(STYLES["stats_bar"])
         stats.setFixedHeight(44)
         sl = QHBoxLayout(stats)
         sl.setContentsMargins(16, 0, 16, 0)
 
         self.pomodoro_count = QLabel("🍅 0 个番茄钟")
-        self.pomodoro_count.setStyleSheet("font-size:13px; color:#e65100;")
-
+        self.pomodoro_count.setStyleSheet(f"font-size:13px; color:{COLORS['orange']};")
         self.focus_time = QLabel("⏱ 专注 0 分钟")
-        self.focus_time.setStyleSheet("font-size:13px; color:#e65100;")
-
+        self.focus_time.setStyleSheet(f"font-size:13px; color:{COLORS['orange']};")
         self.timer_status = QLabel("⏱ 等待中")
-        self.timer_status.setStyleSheet("font-size:13px; color:#666;")
+        self.timer_status.setStyleSheet(f"font-size:13px; color:{COLORS['grey_medium']};")
 
         sl.addWidget(self.pomodoro_count)
         sl.addWidget(self.focus_time)
         sl.addStretch()
         sl.addWidget(self.timer_status)
-        root.addWidget(stats)
+        return stats
 
-        # ── tab widget (🍅番茄 / 📋待办 / ⏰提醒) ──────────────────────
+    def _build_tabs(self) -> QTabWidget:
+        """Tab 面板：番茄记录 / 待办 / 提醒 (CD-02)。"""
         self.tab_widget = QTabWidget()
-        self.tab_widget.setStyleSheet(
-            "QTabWidget::pane { border:none; }"
-            "QTabBar::tab { padding:6px 18px; font-size:13px; }"
-        )
+        self.tab_widget.setStyleSheet(STYLES["tab_widget"])
 
-        # Tab 0: 番茄记录
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border:none; background:#f8f8f8; }")
-
+        scroll.setStyleSheet(STYLES["scroll_area"])
         self.entries_container = QWidget()
-        self.entries_container.setStyleSheet("background:#f8f8f8;")
+        self.entries_container.setStyleSheet(f"background:{COLORS['page_bg']};")
         self.entries_layout = QVBoxLayout(self.entries_container)
         self.entries_layout.setContentsMargins(12, 12, 12, 12)
         self.entries_layout.setSpacing(4)
         self.entries_layout.addStretch()
-
         scroll.setWidget(self.entries_container)
         self.tab_widget.addTab(scroll, "🍅 番茄")
 
-        # Tab 1/2: 待办 & 提醒 (延迟初始化，由 set_reminder_engine 填充)
         self._todo_tab = QWidget()
         self._todo_tab_layout = QVBoxLayout(self._todo_tab)
         self._todo_tab_layout.setContentsMargins(0, 0, 0, 0)
@@ -478,43 +473,39 @@ class MainWindow(QMainWindow):
         self._reminder_tab_layout.setContentsMargins(0, 0, 0, 0)
         self.tab_widget.addTab(self._reminder_tab, "⏰ 提醒")
 
-        root.addWidget(self.tab_widget, 1)
+        return self.tab_widget
 
-        # ── bottom action bar ──────────────────────────────────────────
+    def _build_bottom_bar(self) -> QWidget:
+        """底部操作栏：手动开始 / 补录 / 暂停 / 历史 / 日报 / 设置 (CD-02)。"""
         bottom = QWidget()
-        bottom.setStyleSheet("background:white; border-top:1px solid #eee;")
+        bottom.setStyleSheet(STYLES["bottom_bar"])
         bottom.setFixedHeight(56)
         bl = QHBoxLayout(bottom)
         bl.setContentsMargins(16, 8, 16, 8)
 
         start_btn = QPushButton("▶  手动开始")
-        start_btn.setStyleSheet(self._btn_style("#757575"))
+        start_btn.setStyleSheet(STYLES["btn_grey"])
         start_btn.clicked.connect(self.timer.manual_start)
 
         add_btn = QPushButton("＋  手动补录")
-        add_btn.setStyleSheet(self._btn_style("#5d4037"))
+        add_btn.setStyleSheet(STYLES["btn_brown"])
         add_btn.clicked.connect(self._on_add_entry)
 
         self.pause_btn = QPushButton("⏸  暂停")
-        self.pause_btn.setStyleSheet(self._btn_style("#1976d2"))
+        self.pause_btn.setStyleSheet(STYLES["btn_blue"])
         self.pause_btn.clicked.connect(self._on_pause_resume)
         self.pause_btn.setEnabled(False)
 
         self.history_btn = QPushButton("📚  历史日报")
-        self.history_btn.setStyleSheet(
-            "QPushButton { background:#ef5350; color:white; border:none;"
-            "  border-radius:5px; padding:8px 20px; font-size:13px; }"
-            "QPushButton:hover { border:1px solid rgba(255,255,255,0.5); }"
-            "QPushButton:disabled { background:#e0e0e0; color:#9e9e9e; border:1px solid #e0e0e0; }"
-        )
+        self.history_btn.setStyleSheet(STYLES["btn_history"])
         self.history_btn.clicked.connect(self._open_history_window)
 
         report_btn = QPushButton("📋  生成日报")
-        report_btn.setStyleSheet(self._btn_style("#ef5350"))
+        report_btn.setStyleSheet(STYLES["btn_primary"])
         report_btn.clicked.connect(self._on_generate_report)
 
         settings_btn = QPushButton("⚙  设置")
-        settings_btn.setStyleSheet(self._btn_style("#ef5350"))
+        settings_btn.setStyleSheet(STYLES["btn_primary"])
         settings_btn.clicked.connect(self._on_open_settings)
 
         bl.addWidget(start_btn)
@@ -524,18 +515,11 @@ class MainWindow(QMainWindow):
         bl.addWidget(self.history_btn)
         bl.addWidget(report_btn)
         bl.addWidget(settings_btn)
-        root.addWidget(bottom)
-
-        # Connect timer tick
-        self.timer.tick.connect(self._on_timer_tick)
+        return bottom
 
     @staticmethod
     def _btn_style(color: str) -> str:
-        return (
-            f"QPushButton {{ background:{color}; color:white; border:none;"
-            f"  border-radius:5px; padding:8px 20px; font-size:13px; }}"
-            f"QPushButton:hover {{ background:{color}; border:1px solid rgba(255,255,255,0.5); }}"
-        )
+        return btn_style(color)
 
     # ------------------------------------------------------------------
     # Public

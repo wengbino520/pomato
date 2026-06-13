@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
 )
 
 from src.services.logger import get_logger
+from src.ui.styles import btn_style
 
 logger = get_logger(__name__)
 
@@ -104,26 +105,26 @@ class ReportWindow(QDialog):
 
         self.regenerate_btn = QPushButton("🔄 重新生成")
         self.regenerate_btn.setEnabled(False)
-        self.regenerate_btn.setStyleSheet(self._btn_style("#757575"))
+        self.regenerate_btn.setStyleSheet(btn_style("#757575", padding="8px 16px"))
         self.regenerate_btn.clicked.connect(self._start_generation)
 
         self.copy_btn = QPushButton("📋 复制")
         self.copy_btn.setEnabled(False)
-        self.copy_btn.setStyleSheet(self._btn_style("#1976d2"))
+        self.copy_btn.setStyleSheet(btn_style("#1976d2", padding="8px 16px"))
         self.copy_btn.clicked.connect(self._copy_to_clipboard)
 
         self.export_btn = QPushButton("💾 导出 Markdown")
         self.export_btn.setEnabled(False)
-        self.export_btn.setStyleSheet(self._btn_style("#388e3c"))
+        self.export_btn.setStyleSheet(btn_style("#388e3c", padding="8px 16px"))
         self.export_btn.clicked.connect(self._export_markdown)
 
         self.export_docx_btn = QPushButton("📄 导出 Word")
         self.export_docx_btn.setEnabled(False)
-        self.export_docx_btn.setStyleSheet(self._btn_style("#1565c0"))
+        self.export_docx_btn.setStyleSheet(btn_style("#1565c0", padding="8px 16px"))
         self.export_docx_btn.clicked.connect(self._export_docx)
 
         close_btn = QPushButton("关闭")
-        close_btn.setStyleSheet(self._btn_style("#9e9e9e"))
+        close_btn.setStyleSheet(btn_style("#9e9e9e", padding="8px 16px"))
         close_btn.clicked.connect(self.accept)
 
         bl.addWidget(self.regenerate_btn)
@@ -133,14 +134,6 @@ class ReportWindow(QDialog):
         bl.addWidget(self.export_docx_btn)
         bl.addWidget(close_btn)
         layout.addLayout(bl)
-
-    @staticmethod
-    def _btn_style(color: str) -> str:
-        return (
-            f"QPushButton {{ background:{color}; color:white; border:none;"
-            f"  border-radius:5px; padding:8px 16px; font-size:13px; }}"
-            "QPushButton:disabled { background:#ccc; }"
-        )
 
     # ------------------------------------------------------------------
     # Generation flow
