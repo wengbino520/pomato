@@ -20,8 +20,8 @@
 
 ## 第二层：L1 数据库 — 查询方法
 
-### TASK-02: database.py — `get_daily_tomato_counts()` + 测试
-- **状态**: 🔄 进行中
+### ✅ TASK-02: database.py — `get_daily_tomato_counts()` + 测试
+- **状态**: ✅ 已完成
 - **依赖**: TASK-01 (pyqtgraph 就绪，但 DB 层独立)
 - **文件**: `src/core/database.py`, `tests/test_database.py`
 - **操作**:
@@ -39,8 +39,8 @@
 
 ## 第三层：L3 展示 — StatsWidget
 
-### TASK-03: 创建 StatsWidget 组件（3 图表）
-- **状态**: ⬜ 未开始
+### ✅ TASK-03: 创建 StatsWidget 组件（3 图表）
+- **状态**: ✅ 已完成
 - **依赖**: TASK-02 (DB 查询方法)
 - **文件**: `src/ui/stats_widget.py` (新增)
 - **操作**:
@@ -57,8 +57,8 @@
 
 ## 第四层：L4 集成 — MainWindow
 
-### TASK-04: 集成 StatsWidget 到 MainWindow 第 4 个 Tab
-- **状态**: ⬜ 未开始
+### ✅ TASK-04: 集成 StatsWidget 到 MainWindow 第 4 个 Tab
+- **状态**: ✅ 已完成
 - **依赖**: TASK-03 (StatsWidget 就绪)
 - **文件**: `src/ui/main_window.py`
 - **操作**:
@@ -72,8 +72,8 @@
 
 ## 收尾
 
-### TASK-05: 全量回归 + 路线图更新
-- **状态**: ⬜ 未开始
+### ✅ TASK-05: 全量回归 + 路线图更新
+- **状态**: ✅ 已完成
 - **依赖**: TASK-04 (集成完毕)
 - **文件**: `docs/evolution-roadmap.md`
 - **操作**:
