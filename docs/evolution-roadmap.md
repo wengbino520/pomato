@@ -451,8 +451,8 @@ def register(plugin_manager):
 
 | # | 债务 | 优先级 | 状态 | 方案 |
 |---|------|--------|------|------|
-| FD-01 | F7-07 待办-番茄双向关联 | 🔴 P0 | ⚠️ 部分实现 | `todo_id` 列/回填已做，需验证 UI 链路完整性 |
-| FD-02 | F10 AI 日报待办注入 | 🟡 P1 | ❌ 未实现 | Prompt 中注入待办完成情况 |
+| FD-01 | F7-07 待办-番茄双向关联 | 🔴 P0 | ✅ 已完成 | `todo_id` 列/回填/UI链路 全通 |
+| FD-02 | F10 AI 日报待办注入 | 🟢 P2 | ❌ 未实现 | Prompt 中注入待办完成情况 |
 | FD-03 | 弹窗上一轮上下文 | 🟢 P2 | ❌ 未实现 | `previous_content` 参数已有，UI 链路待完善 |
 
 ### 4.2 代码质量债务
@@ -469,33 +469,37 @@ def register(plugin_manager):
 |---|------|--------|-----------|------|
 | EH-01 | 裸 `except Exception: pass` | 🟡 P1 | `popup_window.py:325` | 改为 `logger.debug("ctypes foreground failed", exc_info=True)` |
 | EH-02 | AI 调用 `logger.exception()` + `raise` | 🟢 P2 | `ai_client.py:99` | 确认上层 UI 有适当的用户错误提示 |
-| EH-03 | 迁移 `except Exception` 过于宽泛 | 🟢 P2 | `database.py:90+` | 限定为 `sqlite3.OperationalError` |
+| EH-02 | AI 调用 `logger.exception()` + `raise` | 🟢 P2 | `ai_client.py:99` | ✅ 已验证 — 符合"记录+上抛"模式 |
+| EH-03 | 迁移 `except Exception` 过于宽泛 | 🟢 P2 | `database.py:90+` | ✅ 已限定为 `sqlite3.OperationalError` |
 
 ### 4.4 基础设施与测试债务
 
-| # | 债务 | 优先级 | 方案 |
-|---|------|--------|------|
-| ID-01 | 结构化日志 | 🟡 P1 | 引入 `structlog`，JSON 格式，按日轮转 |
-| ID-02 | E2E 测试缺失 | 🟡 P1 | `pytest-qt` 模拟完整工作流 |
-| ID-03 | SQLite WAL 模式 | 🟡 P1 | `PRAGMA journal_mode=WAL` 一行配置 |
-| ID-04 | 数据库自动备份 | 🟡 P1 | 每日首次启动时自动备份到 `~/.pomato/backups/` |
-| ID-05 | CI/CD 自动化构建 | 🟢 P2 | GitHub Actions 多平台矩阵构建 |
-| ID-06 | i18n 国际化 | 🟢 P2 | `gettext`，先英文后日韩 |
-| ID-07 | 测试覆盖缺口 | 🟢 P2 | `reminder_engine.on_tick()` 调度逻辑、`ai_client` 流式输出、`holiday_manager` 缓存异常 |
+| # | 债务 | 优先级 | 方案 | 状态 |
+|---|------|--------|------|------|
+| ID-01 | 结构化日志 | 🟡 P1 | JSON 格式 + extra 字段，按日轮转 | ✅ 已完成 |
+| ID-02 | E2E 测试缺失 | 🟡 P1 | `pytest-qt` 模拟完整工作流 | ❌ 待实现 |
+| ID-03 | SQLite WAL 模式 | 🟡 P1 | `PRAGMA journal_mode=WAL` 一行配置 | ✅ 已完成 |
+| ID-04 | 数据库自动备份 | 🟡 P1 | 每日首次启动时自动备份到 `~/.pomato/backups/` | ✅ 已完成 |
+| ID-05 | CI/CD 自动化构建 | 🟢 P2 | GitHub Actions 多平台矩阵构建 | ❌ 待实现 |
+| ID-06 | i18n 国际化 | 🟢 P2 | `gettext`，先英文后日韩 | ❌ 待实现 |
+| ID-07 | 测试覆盖缺口 | 🟢 P2 | `reminder_engine.on_tick()` 调度逻辑、`ai_client` 流式输出、`holiday_manager` 缓存异常 | ❌ 待实现 |
 
 ### 4.5 硬编码
 
-| # | 债务 | 优先级 | 文件 | 方案 |
-|---|------|--------|------|------|
-| HC-01 | `print("\a")` 终端响铃 | 🟢 P2 | `app.py:160` | 改用 `logger.debug()` + 系统通知音 |
-| HC-02 | 状态颜色硬编码 | 🟢 P2 | `app.py:117` | 抽取为配置或主题常量 |
-| HC-03 | Ollama 端口写死 11434 | 🟢 P2 | `ai_client.py:57` | 改用 `is_ollama_url()` 工具函数或配置项 |
+| # | 债务 | 优先级 | 文件 | 方案 | 状态 |
+|---|------|--------|------|------|------|
+| HC-01 | `print("\a")` 终端响铃 | 🟢 P2 | `app.py:160` | 改用 `logger.debug()` | ✅ 已完成 |
+| HC-02 | 状态颜色硬编码 | 🟢 P2 | `app.py:117` | 抽取为 `_STATE_COLORS` 常量 | ✅ 已完成 |
+| HC-03 | Ollama 端口写死 11434 | 🟢 P2 | `ai_client.py:57` | 抽象为 `_is_local_url()` | ✅ 已完成 |
 
-### 4.6 偿还优先级总结
+### 4.6 偿还进度总结
 
 ```
-🔴 P0: FD-01 F7-07 双向关联收尾
-🟡 P1 (本轮): CD-01 重复代码抽取, EH-01 裸except修复, ID-01 结构化日志, ID-03 WAL模式, ID-04 自动备份, ID-02 E2E测试
+✅ 已完成 (12/21): CD-01, EH-01, EH-02, EH-03, HC-01, HC-02, HC-03, FD-01, ID-01, ID-03, ID-04
+🟡 P1 剩余 (1):  ID-02 E2E测试 (需新增 pytest-qt 依赖)
+🟢 P2 剩余 (8):  CD-02 长函数拆分, CD-03 样式常量, ID-05 CI/CD, ID-06 i18n,
+                 ID-07 测试覆盖, FD-02 AI日报增强, FD-03 弹窗上下文
+```
 🟢 P2 (下轮): CD-02 长函数拆分, CD-03 样式常量, ID-05 CI/CD, ID-06 i18n, FD-02 AI日报增强, FD-03 弹窗上下文
 ```
 
