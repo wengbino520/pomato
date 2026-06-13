@@ -228,6 +228,21 @@ class Database:
             return d
         return None
 
+    def get_daily_tomato_counts(self, start_date: str, end_date: str):
+        """Return (date, completed_count) pairs for date range (C3).
+
+        Only counts non-skipped entries. Dates with zero tomatoes are omitted.
+        """
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                """SELECT date, COUNT(*) AS cnt
+                   FROM pomodoro_entries
+                   WHERE date BETWEEN ? AND ? AND skipped = 0
+                   GROUP BY date ORDER BY date""",
+                (start_date, end_date),
+            ).fetchall()
+        return [(r["date"], r["cnt"]) for r in rows]
+
     def save_report(self, date_str, raw_entries, ai_summary=None, final_report=None):
         raw_json = json.dumps(raw_entries, ensure_ascii=False)
         now = datetime.now().isoformat()

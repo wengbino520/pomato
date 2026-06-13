@@ -633,3 +633,33 @@ class TestBackup:
             assert "pomodoro_entries" in table_names, f"备份应包含 pomodoro_entries 表，实际: {table_names}"
             conn.close()
 
+
+# ── C3: 可视化看板 — 每日番茄数查询 ──────────────────────────────────
+
+
+class TestDailyTomatoCounts:
+    """C3: get_daily_tomato_counts() 按日期范围返回每日番茄数。"""
+
+    def test_returns_counts_for_date_range(self, tmp_db):
+        add(tmp_db, date="2026-06-08", session_no=1, content="周一任务")
+        add(tmp_db, date="2026-06-09", session_no=1, content="周二任务")
+        add(tmp_db, date="2026-06-09", session_no=2, content="周二第二个")
+        counts = dict(tmp_db.get_daily_tomato_counts("2026-06-08", "2026-06-10"))
+        assert counts["2026-06-08"] == 1
+        assert counts["2026-06-09"] == 2
+
+    def test_excludes_skipped_entries(self, tmp_db):
+        add(tmp_db, date="2026-06-08", session_no=1, content="正常")
+        add(tmp_db, date="2026-06-08", session_no=2, content="跳过", skipped=True)
+        counts = dict(tmp_db.get_daily_tomato_counts("2026-06-08", "2026-06-08"))
+        assert counts["2026-06-08"] == 1
+
+    def test_empty_range_returns_empty_list(self, tmp_db):
+        counts = tmp_db.get_daily_tomato_counts("2026-01-01", "2026-01-05")
+        assert counts == []
+
+    def test_single_day_query(self, tmp_db):
+        add(tmp_db, date="2026-06-10", session_no=1, content="当天")
+        counts = dict(tmp_db.get_daily_tomato_counts("2026-06-10", "2026-06-10"))
+        assert counts["2026-06-10"] == 1
+
