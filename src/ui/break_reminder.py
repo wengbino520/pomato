@@ -52,11 +52,11 @@ class BreakReminderWindow(QWidget):
     # ── Opacity property for QPropertyAnimation ─────────────
 
     @pyqtProperty(float)
-    def windowOpacity(self):
+    def anim_opacity(self):
         return super().windowOpacity()
 
-    @windowOpacity.setter  # type: ignore[no-redef]
-    def windowOpacity(self, value: float):
+    @anim_opacity.setter  # type: ignore[no-redef]
+    def anim_opacity(self, value: float):
         super().setWindowOpacity(value)
 
     def _setup_ui(self):
@@ -110,7 +110,7 @@ class BreakReminderWindow(QWidget):
         self.setWindowOpacity(0.0)
         self.show()
 
-        self._fade_in_anim = QPropertyAnimation(self, b"windowOpacity")
+        self._fade_in_anim = QPropertyAnimation(self, b"anim_opacity")
         self._fade_in_anim.setDuration(_ANIM_DURATION)
         self._fade_in_anim.setStartValue(0.0)
         self._fade_in_anim.setEndValue(0.95)
@@ -126,7 +126,7 @@ class BreakReminderWindow(QWidget):
             return
         self._auto_close_timer.stop()
 
-        self._fade_out_anim = QPropertyAnimation(self, b"windowOpacity")
+        self._fade_out_anim = QPropertyAnimation(self, b"anim_opacity")
         self._fade_out_anim.setDuration(_ANIM_DURATION)
         self._fade_out_anim.setStartValue(self.windowOpacity())
         self._fade_out_anim.setEndValue(0.0)

@@ -72,6 +72,19 @@ class PopupWindow(QDialog):
         prompt.setStyleSheet("font-size: 13px; color: #555;")
         layout.addWidget(prompt)
 
+        # ── US-01: 上下文提示 ───────────────────────────────────
+        if self.previous_content:
+            truncated = self.previous_content[:50] + ("…" if len(self.previous_content) > 50 else "")
+            context_label = QLabel(f"上一轮：{truncated}")
+            context_label.setStyleSheet("font-size: 11px; color: #999; background: #f5f5f5;"
+                                        " border-radius: 4px; padding: 4px 8px;")
+            context_label.setWordWrap(True)
+            layout.addWidget(context_label)
+        else:
+            context_label = QLabel("今天第一个番茄钟 🍅")
+            context_label.setStyleSheet("font-size: 11px; color: #bbb; padding: 2px 4px;")
+            layout.addWidget(context_label)
+
         # ── text input ─────────────────────────────────────────────────
         self.text_edit = QTextEdit()
         self.text_edit.setPlaceholderText(
@@ -114,6 +127,7 @@ class PopupWindow(QDialog):
             btn.clicked.connect(lambda _checked, t=tag, b=btn: self._toggle_tag(t, b))
             tags_layout.addWidget(btn)
             self.tag_buttons[tag] = btn
+        self._tag_list = list(self.tag_buttons.keys())  # US-03: shortcut index → tag name
         tags_layout.addStretch()
         layout.addWidget(tags_widget)
 
