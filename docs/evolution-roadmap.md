@@ -460,8 +460,8 @@ def register(plugin_manager):
 | # | 债务 | 优先级 | 文件 | 方案 |
 |---|------|--------|------|------|
 | CD-01 | 关联待办 UI 重复 3 份 | 🟡 P1 | `popup_window.py`, `main_window.py` | 抽取 `TodoLinkWidget` 复用组件 |
-| CD-02 | `_setup_ui()` 过长 (~190行) | 🟢 P2 | `main_window.py:408` | 拆分为 `_build_header()` / `_build_stats_bar()` / `_build_tabs()` / `_build_bottom_bar()` |
-| CD-03 | 内联样式字符串散落 | 🟢 P2 | 多个 UI 文件 | 统一样式常量或主题文件 |
+| CD-02 | `_setup_ui()` 过长 (~190行) | 🟢 P2 | `main_window.py:408` | ✅ 拆分为 `_build_header()` / `_build_stats_bar()` / `_build_tabs()` / `_build_bottom_bar()` |
+| CD-03 | 内联样式字符串散落 | 🟢 P2 | 多个 UI 文件 | ✅ 新建 `src/ui/styles.py`，统一 `COLORS` + `btn_style()` + `STYLES` |
 
 ### 4.3 异常处理债务
 
@@ -495,11 +495,11 @@ def register(plugin_manager):
 ### 4.6 偿还进度总结
 
 ```
-✅ 已完成 (13/21): CD-01, EH-01, EH-02, EH-03, HC-01, HC-02, HC-03, FD-01, ID-01, ID-02, ID-03, ID-04
-🟢 P2 剩余 (8):  CD-02 长函数拆分, CD-03 样式常量, ID-05 CI/CD, ID-06 i18n,
-                 ID-07 测试覆盖, FD-02 AI日报增强, FD-03 弹窗上下文
+✅ 已完成 (15/21): CD-01, CD-02, CD-03, EH-01, EH-02, EH-03, HC-01, HC-02, HC-03, FD-01, ID-01, ID-02, ID-03, ID-04
+🟢 P2 剩余 (6):  ID-05 CI/CD, ID-06 i18n, ID-07 测试覆盖,
+                 FD-02 AI日报增强, FD-03 弹窗上下文
 ```
-🟢 P2 (下轮): CD-02 长函数拆分, CD-03 样式常量, ID-05 CI/CD, ID-06 i18n, FD-02 AI日报增强, FD-03 弹窗上下文
+🟢 P2 (下轮): ID-05 CI/CD, ID-06 i18n, ID-07 测试覆盖, FD-02 AI日报增强, FD-03 弹窗上下文
 ```
 
 ---
