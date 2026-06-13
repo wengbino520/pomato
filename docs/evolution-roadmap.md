@@ -477,7 +477,7 @@ def register(plugin_manager):
 | # | 债务 | 优先级 | 方案 | 状态 |
 |---|------|--------|------|------|
 | ID-01 | 结构化日志 | 🟡 P1 | JSON 格式 + extra 字段，按日轮转 | ✅ 已完成 |
-| ID-02 | E2E 测试缺失 | 🟡 P1 | `pytest-qt` 模拟完整工作流 | ❌ 待实现 |
+| ID-02 | E2E 测试缺失 | 🟡 P1 | `pytest-qt` 模拟完整工作流 | ✅ 已完成 (22 用例) |
 | ID-03 | SQLite WAL 模式 | 🟡 P1 | `PRAGMA journal_mode=WAL` 一行配置 | ✅ 已完成 |
 | ID-04 | 数据库自动备份 | 🟡 P1 | 每日首次启动时自动备份到 `~/.pomato/backups/` | ✅ 已完成 |
 | ID-05 | CI/CD 自动化构建 | 🟢 P2 | GitHub Actions 多平台矩阵构建 | ❌ 待实现 |
@@ -495,8 +495,7 @@ def register(plugin_manager):
 ### 4.6 偿还进度总结
 
 ```
-✅ 已完成 (12/21): CD-01, EH-01, EH-02, EH-03, HC-01, HC-02, HC-03, FD-01, ID-01, ID-03, ID-04
-🟡 P1 剩余 (1):  ID-02 E2E测试 (需新增 pytest-qt 依赖)
+✅ 已完成 (13/21): CD-01, EH-01, EH-02, EH-03, HC-01, HC-02, HC-03, FD-01, ID-01, ID-02, ID-03, ID-04
 🟢 P2 剩余 (8):  CD-02 长函数拆分, CD-03 样式常量, ID-05 CI/CD, ID-06 i18n,
                  ID-07 测试覆盖, FD-02 AI日报增强, FD-03 弹窗上下文
 ```
