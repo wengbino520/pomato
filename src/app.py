@@ -157,13 +157,13 @@ class TrayManager(QObject):
                         return
                     except FileNotFoundError:
                         continue
-                print("\a", end="", flush=True)  # terminal bell fallback
+                logger.debug("Terminal bell fallback (sound subsystem unavailable)")
             elif sys.platform == "darwin":
                 import subprocess
                 subprocess.Popen(["afplay", "/System/Library/Sounds/Ping.aiff"],
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
-            pass
+            logger.debug("Sound playback failed", exc_info=True)
 
     # ------------------------------------------------------------------
     # Timer signal handlers

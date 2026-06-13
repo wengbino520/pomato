@@ -131,7 +131,7 @@ class Database:
             # Migration: add todo_date column if missing (added in TASK-02)
             try:
                 conn.execute("ALTER TABLE todos ADD COLUMN todo_date TEXT")
-            except Exception:
+            except sqlite3.OperationalError:
                 logger.debug("Migration: todo_date column already exists")
             # Backfill: set todo_date from created_at date for existing rows
             conn.execute(
@@ -139,13 +139,13 @@ class Database:
             )
             try:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_todos_todo_date ON todos(todo_date)")
-            except Exception:
+            except sqlite3.OperationalError:
                 logger.debug("Migration: idx_todos_todo_date index already exists")
 
             # Migration: add remind_date column for one-time dated reminders
             try:
                 conn.execute("ALTER TABLE reminders ADD COLUMN remind_date TEXT")
-            except Exception:
+            except sqlite3.OperationalError:
                 logger.debug("Migration: remind_date column already exists")
 
             # Migration (F7-07): add todo_id column for bidirectional todo-pomodoro linking
@@ -154,7 +154,7 @@ class Database:
                     "ALTER TABLE pomodoro_entries ADD COLUMN todo_id INTEGER "
                     "REFERENCES todos(id) ON DELETE SET NULL"
                 )
-            except Exception:
+            except sqlite3.OperationalError:
                 logger.debug("Migration: todo_id column already exists")
             # Backfill: set todo_id from todos.pomodoro_id for existing records
             conn.execute(
