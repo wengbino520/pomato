@@ -7,13 +7,13 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QMessageBox,
     QProgressBar,
     QPushButton,
     QSplitter,
     QTextEdit,
+    QTreeWidget,
+    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -51,7 +51,7 @@ class _HistoryAIWorker(QThread):
 
 
 class HistoryWindow(QDialog):
-    """历史日报列表：左侧日期列表，右侧预览日报内容，支持 AI 总结。"""
+    """历史报告：左侧按周期分层（日报/周报/月报/未生成），右侧预览内容，支持 AI 总结。"""
 
     def __init__(self, db, parent=None, ai_client=None, config=None, initial_date=None):
         super().__init__(parent)
@@ -109,14 +109,17 @@ class HistoryWindow(QDialog):
         ll.setContentsMargins(8, 8, 4, 8)
         ll.addWidget(QLabel("报告列表"))
 
-        self.date_list = QListWidget()
-        self.date_list.setStyleSheet(
-            "QListWidget { border:1px solid #eee; border-radius:4px; }"
-            "QListWidget::item { padding:8px; }"
-            "QListWidget::item:selected { background:#ffebee; color:#d32f2f; }"
+        self.date_tree = QTreeWidget()
+        self.date_tree.setHeaderHidden(True)
+        self.date_tree.setIndentation(12)
+        self.date_tree.setRootIsDecorated(True)
+        self.date_tree.setStyleSheet(
+            "QTreeWidget { border:1px solid #eee; border-radius:4px; }"
+            "QTreeWidget::item { padding:6px 8px; }"
+            "QTreeWidget::item:selected { background:#ffebee; color:#d32f2f; }"
         )
-        self.date_list.currentItemChanged.connect(self._on_date_selected)
-        ll.addWidget(self.date_list)
+        self.date_tree.currentItemChanged.connect(self._on_date_selected)
+        ll.addWidget(self.date_tree)
         splitter.addWidget(left)
 
         # Right: report preview
@@ -176,14 +179,20 @@ class HistoryWindow(QDialog):
 
     PERIOD_LABELS = {"daily": "日报", "weekly": "周报", "monthly": "月报"}
     PERIOD_EMOJIS = {"daily": "📅", "weekly": "📊", "monthly": "📈"}
+    SECTION_ORDER = ["daily", "weekly", "monthly", "__no_report__"]
+    SECTION_EMOJIS = {
+        "daily": "📅", "weekly": "📊", "monthly": "📈", "__no_report__": "⚠",
+    }
+    SECTION_TITLES = {
+        "daily": "日报", "weekly": "周报", "monthly": "月报", "__no_report__": "未生成报告",
+    }
 
     def _load_dates(self):
-        self.date_list.clear()
+        self.date_tree.clear()
         self._reports = []
 
         keyword = self.search_input.text().strip().lower()
         period_filter = self.period_filter.currentText()
-        # Map filter text to period value
         filter_period: str | None = None
         if period_filter == "日报":
             filter_period = "daily"
@@ -192,11 +201,10 @@ class HistoryWindow(QDialog):
         elif period_filter == "月报":
             filter_period = "monthly"
 
-        # Collect reports (with period info)
+        # Collect reports
         all_reports = self.db.get_all_reports()
         if filter_period:
             all_reports = [r for r in all_reports if r["period"] == filter_period]
-
         if keyword:
             all_reports = [
                 r for r in all_reports
@@ -204,62 +212,101 @@ class HistoryWindow(QDialog):
                 or keyword in (r.get("final_report") or "").lower()
                 or keyword in (r.get("ai_summary") or "").lower()
             ]
-
         self._reports = all_reports
 
-        # Also get dates with entries but no report
+        # Entry-only dates
         report_dates = {r["date"] for r in all_reports}
         entry_dates = set(self.db.get_all_entry_dates())
         if keyword:
             entry_dates = {d for d in entry_dates if keyword in d.lower()}
-        # Only show entry-only dates when no period filter (or filter is daily, since entries are daily)
         if filter_period is None or filter_period == "daily":
             entry_only_dates = sorted(entry_dates - report_dates, reverse=True)
         else:
             entry_only_dates = []
 
-        if not all_reports and not entry_only_dates:
-            item = QListWidgetItem("（暂无记录）")
+        # Build grouped data
+        groups: dict[str, list] = {
+            "daily": [], "weekly": [], "monthly": [], "__no_report__": [],
+        }
+        for r in all_reports:
+            groups[r["period"]].append(r)
+        for d in entry_only_dates:
+            groups["__no_report__"].append({"date": d, "period": None})
+
+        # Create tree sections
+        has_any = False
+        for section_key in self.SECTION_ORDER:
+            items = groups[section_key]
+            if not items:
+                continue
+            has_any = True
+            emoji = self.SECTION_EMOJIS[section_key]
+            title = self.SECTION_TITLES[section_key]
+
+            # Sort within section by date descending
+            items.sort(key=lambda x: x["date"], reverse=True)
+
+            section = QTreeWidgetItem(self.date_tree)
+            section.setText(0, f"{emoji}  {title}  ({len(items)})")
+            section.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            section.setData(0, Qt.ItemDataRole.UserRole, ("__section__", section_key))
+            font = section.font(0)
+            font.setBold(True)
+            section.setFont(0, font)
+
+            for item_data in items:
+                child = QTreeWidgetItem(section)
+                if section_key == "__no_report__":
+                    child.setText(0, item_data["date"])
+                    child.setForeground(0, QColor("gray"))
+                    child.setData(0, Qt.ItemDataRole.UserRole,
+                                  (item_data["date"], None))
+                else:
+                    child.setText(0, item_data["date"])
+                    child.setData(0, Qt.ItemDataRole.UserRole,
+                                  (item_data["date"], item_data["period"]))
+
+            section.setExpanded(True)
+
+        if not has_any:
+            item = QTreeWidgetItem(self.date_tree)
+            item.setText(0, "（暂无记录）")
             item.setFlags(Qt.ItemFlag.NoItemFlags)
-            self.date_list.addItem(item)
             self.preview_title.setText("请选择左侧日期查看日报")
             self.preview.setPlainText("")
             return
 
-        # Show reports first (with period badges), then entry-only dates
-        for r in all_reports:
-            emoji = self.PERIOD_EMOJIS.get(r["period"], "📄")
-            label = r["period"]
-            period_label = self.PERIOD_LABELS.get(r.get("period", "daily"), "日报")
-            display = f"{emoji}  {r['date']}  · {period_label}"
-            item = QListWidgetItem(display)
-            item.setData(Qt.ItemDataRole.UserRole, (r["date"], r["period"]))
-            self.date_list.addItem(item)
-
-        for d in entry_only_dates:
-            item = QListWidgetItem(f"⚠ {d}")
-            item.setForeground(QColor("gray"))
-            item.setData(Qt.ItemDataRole.UserRole, (d, None))
-            self.date_list.addItem(item)
-
         # Pre-select initial date
         found = False
         if self._initial_date:
-            for i in range(self.date_list.count()):
-                data = self.date_list.item(i).data(Qt.ItemDataRole.UserRole)
-                if data and data[0] == self._initial_date:
-                    self.date_list.setCurrentRow(i)
-                    found = True
+            for i in range(self.date_tree.topLevelItemCount()):
+                section = self.date_tree.topLevelItem(i)
+                for j in range(section.childCount()):
+                    child = section.child(j)
+                    data = child.data(0, Qt.ItemDataRole.UserRole)
+                    if data and data[0] == self._initial_date:
+                        self.date_tree.setCurrentItem(child)
+                        found = True
+                        break
+                if found:
                     break
             self._initial_date = None
         if not found:
-            self.date_list.setCurrentRow(0)
+            # Select first leaf in first section
+            for i in range(self.date_tree.topLevelItemCount()):
+                section = self.date_tree.topLevelItem(i)
+                if section.childCount() > 0:
+                    self.date_tree.setCurrentItem(section.child(0))
+                    break
 
-    def _on_date_selected(self, current: QListWidgetItem, _prev):
+    def _on_date_selected(self, current: QTreeWidgetItem, _prev):
         if current is None:
             return
-        data = current.data(Qt.ItemDataRole.UserRole)
+        data = current.data(0, Qt.ItemDataRole.UserRole)
         if not data:
+            return
+        # Skip section headers
+        if data[0] == "__section__":
             return
         date_str, period = data
         self._current_date = date_str
@@ -372,14 +419,17 @@ class HistoryWindow(QDialog):
         self.db.save_report(self._current_date,
                             self.db.get_entries_by_date(self._current_date),
                             period="daily", ai_summary=result, final_report=result)
-        # Refresh: 新生成的日报会去掉 ⚠ 标记
+        # Refresh: 新生成的日报会移到日报分组
         self._load_dates()
         # 重新选中当前日期
-        for i in range(self.date_list.count()):
-            data = self.date_list.item(i).data(Qt.ItemDataRole.UserRole)
-            if data and data[0] == self._current_date:
-                self.date_list.setCurrentRow(i)
-                break
+        for i in range(self.date_tree.topLevelItemCount()):
+            section = self.date_tree.topLevelItem(i)
+            for j in range(section.childCount()):
+                child = section.child(j)
+                data = child.data(0, Qt.ItemDataRole.UserRole)
+                if data and data[0] == self._current_date:
+                    self.date_tree.setCurrentItem(child)
+                    return
 
     def _on_ai_error(self, error_msg: str):
         logger.error("AI summary failed for %s: %s", self._current_date, error_msg)
