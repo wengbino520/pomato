@@ -4,22 +4,48 @@ POMATO 统一日志模块。
 用法:
     from src.services.logger import get_logger
     logger = get_logger(__name__)
-    logger.info("something happened")
+    logger.info("something happened", extra={"session": 3})
     logger.exception("unexpected error")    # 自动附带 traceback
 
 配置:
-    控制台: INFO 及以上（以 QApplication 运行时跳过，避免干扰 GUI 输出）
-    文件:   DEBUG 及以上，按天轮转，存储在 ~/.pomato/logs/ 下
+    控制台: INFO 及以上，文本格式
+    文件:   DEBUG 及以上，JSON 结构化格式，按天轮转，存储在 ~/.pomato/logs/
 """
 
+import json
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 _LOG_INITIALIZED = False
 _LOG_DIR: Path | None = None
+
+
+class JsonFormatter(logging.Formatter):
+    """将日志记录序列化为 JSON 行，便于结构化查询和分析 (ID-01)。
+
+    输出格式每行一个 JSON 对象::
+
+        {"ts":"2026-06-14T09:15:00.123Z","level":"INFO","name":"src.app","msg":"..."}
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        log_entry = {
+            "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.") + f"{datetime.now(timezone.utc).microsecond // 1000:03d}Z",
+            "level": record.levelname,
+            "name": record.name,
+            "msg": record.getMessage(),
+        }
+        if record.exc_info and record.exc_info[1]:
+            log_entry["exc"] = self.formatException(record.exc_info)
+        # 注入通过 extra= 传入的自定义字段
+        for key in ("session", "todo_id", "elapsed", "state", "duration_ms"):
+            val = getattr(record, key, None)
+            if val is not None:
+                log_entry[key] = val
+        return json.dumps(log_entry, ensure_ascii=False)
 
 
 def setup_logging(log_dir: str | Path = "", *, console: bool = False) -> None:
@@ -45,13 +71,7 @@ def setup_logging(log_dir: str | Path = "", *, console: bool = False) -> None:
     root.setLevel(logging.DEBUG)
     root.handlers.clear()
 
-    # 格式
-    fmt = logging.Formatter(
-        "%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-
-    # 文件 handler —— DEBUG 级别，按天旋转，保留 90 天
+    # 文件 handler —— DEBUG 级别，JSON 格式，按天旋转，保留 90 天 (ID-01)
     file_handler = TimedRotatingFileHandler(
         filename=log_dir / "pomato.log",
         when="midnight",
@@ -60,14 +80,18 @@ def setup_logging(log_dir: str | Path = "", *, console: bool = False) -> None:
         encoding="utf-8",
     )
     file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(fmt)
+    file_handler.setFormatter(JsonFormatter())
     root.addHandler(file_handler)
 
-    # 控制台 handler —— INFO 级别，仅 CLI 模式开启
+    # 控制台 handler —— INFO 级别，文本格式，仅 CLI 模式开启
     if console:
+        console_fmt = logging.Formatter(
+            "%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(logging.INFO)
-        console_handler.setFormatter(fmt)
+        console_handler.setFormatter(console_fmt)
         root.addHandler(console_handler)
 
     # 写入分隔线，标记新会话
