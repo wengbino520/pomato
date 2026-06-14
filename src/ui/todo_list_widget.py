@@ -20,6 +20,7 @@ class TodoListWidget(QWidget):
     def __init__(self, reminder_engine, parent=None):
         super().__init__(parent)
         self._engine = reminder_engine
+        self._current_date = QDate.currentDate().toString("yyyy-MM-dd")
         self._setup_ui()
         self._engine.todos_changed.connect(self.refresh)
 
@@ -104,10 +105,12 @@ class TodoListWidget(QWidget):
         """从 engine 重新加载待办并重建卡片。
 
         Args:
-            date_str: ISO 日期字符串。None 则使用今天。
+            date_str: ISO 日期字符串。None 则沿用上次设置的日期（初始为今天）。
         """
         if date_str is None:
-            date_str = QDate.currentDate().toString("yyyy-MM-dd")
+            date_str = self._current_date
+        else:
+            self._current_date = date_str
         todos = self._engine.get_todos(date_str=date_str, include_done=True)
 
         # 彻底清空布局（takeAt 立即移除，deleteLater 延迟释放）
@@ -155,7 +158,9 @@ class TodoListWidget(QWidget):
 
         # Checkbox
         cb = QCheckBox()
+        cb.blockSignals(True)
         cb.setChecked(todo.get("status") == "done")
+        cb.blockSignals(False)
         cb.toggled.connect(lambda checked, tid=todo["id"]: self._on_toggle(tid, checked))
 
         # Title
