@@ -1,7 +1,7 @@
 from datetime import date
 
 from PyQt6.QtCore import QDate, Qt, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QCloseEvent
+from PyQt6.QtGui import QCloseEvent, QFontMetrics, QResizeEvent
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -256,20 +256,25 @@ class EntryItem(QFrame):
         time_lbl.setStyleSheet("color:#999; font-size:11px;")
         time_lbl.setFixedWidth(94)
 
-        # Content (collapsible: single-line truncated by default, expand via ▼/▲)
-        if entry.get("skipped"):
+        # Content (collapsible: single-line elided by default, expand via ▼/▲)
+        skipped = entry.get("skipped")
+        if skipped:
             text, style = "（已跳过）", "color:#ccc; font-size:13px;"
         else:
             text = entry.get("content") or ""
             style = "color:#333; font-size:13px;"
         self._full_text = text
+        self._skipped = skipped
 
         content_lbl = QLabel(text)
         content_lbl.setStyleSheet(style)
-        content_lbl.setWordWrap(False)  # single-line by default
+        content_lbl.setWordWrap(True)
         content_lbl.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
         )
+        # Single-line height based on font metrics (not sizeHint which reads full text)
+        fm = QFontMetrics(content_lbl.font())
+        content_lbl.setMaximumHeight(fm.height() + 2)
         self._content_lbl = content_lbl
 
         # Expand/collapse toggle (only for non-empty, non-skipped entries)
@@ -338,17 +343,35 @@ class EntryItem(QFrame):
             self._toggle_btn.setText("▼")
             self._toggle_btn.setToolTip("展开查看全文")
 
+    def resizeEvent(self, event: QResizeEvent):
+        """Recalculate elided text when widget resizes."""
+        super().resizeEvent(event)
+        if not self._expanded and not self._skipped:
+            self._apply_elide()
+
+    def _apply_elide(self):
+        """Apply QFontMetrics.elidedText() to truncate with … in single line."""
+        if not self._full_text:
+            return
+        fm = QFontMetrics(self._content_lbl.font())
+        avail = self._content_lbl.width()
+        if avail <= 0:
+            return
+        elided = fm.elidedText(self._full_text, Qt.TextElideMode.ElideRight, avail)
+        self._content_lbl.setText(elided)
+
     def _toggle_expand(self):
         """Expand/collapse the content label between single-line and full text."""
         self._expanded = not self._expanded
         if self._expanded:
-            self._content_lbl.setWordWrap(True)
-            self._content_lbl.setMinimumHeight(0)
             self._content_lbl.setMaximumHeight(16777215)  # unconstrained
+            self._content_lbl.setText(self._full_text)
             self._toggle_btn.setText("▲")
             self._toggle_btn.setToolTip("收起")
         else:
-            self._content_lbl.setWordWrap(False)
+            fm = QFontMetrics(self._content_lbl.font())
+            self._content_lbl.setMaximumHeight(fm.height() + 2)
+            self._apply_elide()
             self._toggle_btn.setText("▼")
             self._toggle_btn.setToolTip("展开查看全文")
 

@@ -81,9 +81,10 @@ class TestEntryItemToggle:
     """EntryItem 展开/收起功能测试。"""
 
     def test_content_label_starts_single_line(self, qapp):
-        """新建 EntryItem 时 content_lbl 为 WordWrap(False)（单行截断）。"""
+        """新建 EntryItem 时，content_lbl 高度被限制为单行。"""
         item = EntryItem(_make_entry(content="这是一段很长的测试内容"))
-        assert item._content_lbl.wordWrap() is False
+        assert item._content_lbl.maximumHeight() < 16777215  # 受限
+        assert not item._expanded
 
     def test_toggle_visible_for_non_empty_content(self, qapp):
         """有内容且非 skipped 时，▼ 按钮可见。"""
@@ -101,19 +102,20 @@ class TestEntryItemToggle:
         item = EntryItem(_make_entry(content="内容", skipped=True))
         assert item._toggle_btn.isHidden()
 
-    def test_expand_enables_word_wrap(self, qapp):
-        """点击 ▼ 后展开，WordWrap 变为 True。"""
+    def test_expand_shows_full_text(self, qapp):
+        """点击 ▼ 后展开，高度解除限制，显示全文。"""
         item = EntryItem(_make_entry(content="有内容"))
         item._toggle_btn.click()
-        assert item._content_lbl.wordWrap() is True
+        assert item._content_lbl.maximumHeight() == 16777215  # unconstrained
+        assert item._content_lbl.text() == "有内容"
         assert item._toggle_btn.text() == "▲"
 
-    def test_collapse_after_expand(self, qapp):
-        """展开后再点击 ▲ 收起，恢复单行。"""
+    def test_collapse_restricts_height_again(self, qapp):
+        """展开后再点击 ▲ 收起，恢复高度限制。"""
         item = EntryItem(_make_entry(content="有内容"))
         item._toggle_btn.click()  # expand
         item._toggle_btn.click()  # collapse
-        assert item._content_lbl.wordWrap() is False
+        assert item._content_lbl.maximumHeight() < 16777215  # restricted
         assert item._toggle_btn.text() == "▼"
 
     def test_tooltip_changes_on_toggle(self, qapp):
