@@ -1,3 +1,6 @@
+import os
+
+import httpx
 from datetime import date
 
 from openai import OpenAI
@@ -57,6 +60,31 @@ def _is_local_url(base_url: str) -> bool:
     )
 
 
+def _build_http_client() -> httpx.Client:
+    """构建 httpx.Client，仅信任 HTTP_PROXY/HTTPS_PROXY，避免 SOCKS scheme 崩溃。
+
+    httpx 默认读取 ALL_PROXY/all_proxy 环境变量并直接使用其 scheme。
+    当值为 socks://... 时，httpx 抛出 ValueError("Unknown scheme for proxy URL")。
+    此函数在创建 Client 前临时移除 SOCKS 代理变量，HTTP(S) 代理仍生效。
+    """
+    saved = {}
+    for key in ("all_proxy", "ALL_PROXY"):
+        if key in os.environ:
+            saved[key] = os.environ.pop(key)
+    try:
+        return httpx.Client()
+    finally:
+        os.environ.update(saved)
+
+
+def _sanitize_base_url(url: str) -> str:
+    """清理 base_url：去除末尾 /chat/completions（避免双重拼接）。"""
+    url = (url or "").strip().rstrip("/")
+    if url.endswith("/chat/completions"):
+        url = url[: -len("/chat/completions")]
+    return url
+
+
 def build_prompt(entries: list[dict], report_date: str | None = None,
                  todos: list[dict] | None = None, period: str = "daily") -> str:
     if not report_date:
@@ -107,15 +135,20 @@ class AIClient:
         period: str = "daily",
     ) -> str:
         api_key = self.config.get("api_key", "")
-        base_url = self.config.get("api_base_url", "https://api.openai.com/v1")
-        model = self.config.get("api_model", "gpt-4o-mini")
+        base_url = _sanitize_base_url(
+            self.config.get("api_base_url", "https://api.openai.com/v1")
+        )
+        model = (self.config.get("api_model", "gpt-4o-mini") or "").strip()
         system_prompt = self.config.get("report_system_prompt", "") or DEFAULT_SYSTEM_PROMPT
 
         local_ollama = _is_local_url(base_url)
         if not api_key and not local_ollama:
             raise ValueError("请先在设置中配置 API Key")
 
-        client_kwargs = {"base_url": base_url}
+        client_kwargs = {
+            "base_url": base_url,
+            "http_client": _build_http_client(),
+        }
         if api_key:
             client_kwargs["api_key"] = api_key
         client = OpenAI(**client_kwargs)
@@ -136,6 +169,8 @@ class AIClient:
                     temperature=0.7,
                 )
                 for chunk in stream:
+                    if not chunk.choices:
+                        continue  # 部分 LLM 服务在流末尾发空 choices chunk
                     delta = chunk.choices[0].delta.content or ""
                     if delta:
                         chunks.append(delta)
@@ -149,6 +184,9 @@ class AIClient:
                 messages=messages,
                 temperature=0.7,
             )
+            if not response.choices:
+                logger.warning("AI returned empty choices for model=%s", model)
+                return ""
             result = response.choices[0].message.content or ""
             logger.info("AI response received: %d chars", len(result))
             return result

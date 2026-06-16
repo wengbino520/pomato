@@ -433,3 +433,151 @@ class TestBuildPromptWithTodos:
         assert "完成任务A" in prompt
         assert "今日待办" in prompt
         assert "代码审查" in prompt
+
+
+# ── 修复验证：SOCKS 代理 + 空 choices + 配置清理 ───────────────────────────────
+
+class TestBuildHttpClient:
+    """_build_http_client() 在 all_proxy=socks:// 时不崩溃，HTTP_PROXY 仍生效。"""
+
+    def test_socks_all_proxy_does_not_crash(self):
+        """当 all_proxy=socks://... 时，_build_http_client() 不应抛出 ValueError。"""
+        import os as _os
+        from src.services.ai_client import _build_http_client
+
+        saved_all = _os.environ.get("all_proxy")
+        saved_ALL = _os.environ.get("ALL_PROXY")
+        try:
+            _os.environ["all_proxy"] = "socks://127.0.0.1:1080"
+            # 不应抛出 ValueError
+            client = _build_http_client()
+            assert client is not None
+        finally:
+            # 恢复环境
+            for key, val in (("all_proxy", saved_all), ("ALL_PROXY", saved_ALL)):
+                if val is not None:
+                    _os.environ[key] = val
+                else:
+                    _os.environ.pop(key, None)
+
+    def test_env_vars_restored_after_build(self):
+        """_build_http_client() 调用后应恢复 all_proxy/ALL_PROXY。"""
+        import os as _os
+        from src.services.ai_client import _build_http_client
+
+        _os.environ["all_proxy"] = "socks://127.0.0.1:1080"
+        _build_http_client()
+        assert _os.environ.get("all_proxy") == "socks://127.0.0.1:1080"
+        _os.environ.pop("all_proxy", None)
+
+
+class TestSanitizeBaseUrl:
+    """_sanitize_base_url() 清理配置中的 base_url。"""
+
+    def test_strips_trailing_chat_completions(self):
+        from src.services.ai_client import _sanitize_base_url
+        assert _sanitize_base_url(
+            "https://host/v1/chat/completions"
+        ) == "https://host/v1"
+
+    def test_keeps_correct_url_unchanged(self):
+        from src.services.ai_client import _sanitize_base_url
+        assert _sanitize_base_url("https://api.openai.com/v1") == "https://api.openai.com/v1"
+
+    def test_strips_trailing_slash_first(self):
+        from src.services.ai_client import _sanitize_base_url
+        assert _sanitize_base_url(
+            "https://host/v1/chat/completions/"
+        ) == "https://host/v1"
+
+    def test_empty_url_returns_empty(self):
+        from src.services.ai_client import _sanitize_base_url
+        assert _sanitize_base_url("") == ""
+
+
+class TestEmptyChoicesDefense:
+    """空 choices chunk / 空响应 choices 的防御性代码。"""
+
+    def test_streaming_skips_empty_choices_chunk(self, tmp_config):
+        """流式调用遇到 choices=[] 不会崩溃，跳过该 chunk。"""
+        tmp_config.set("api_key", "sk-test")
+
+        chunk_empty = MagicMock()
+        chunk_empty.choices = []  # 空 choices，不是 None
+
+        chunk_valid = MagicMock()
+        chunk_valid.choices = [MagicMock()]
+        chunk_valid.choices[0].delta.content = "有效内容"
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = iter(
+            [chunk_empty, chunk_valid]
+        )
+
+        received = []
+        with patch("src.services.ai_client.OpenAI", return_value=mock_client):
+            result = AIClient(tmp_config).generate_report(
+                [make_entry(content="任务")],
+                on_chunk=lambda c: received.append(c),
+            )
+
+        assert received == ["有效内容"]
+        assert result == "有效内容"
+
+    def test_non_streaming_empty_choices_returns_empty(self, tmp_config):
+        """非流式调用 choices=[] 返回空字符串，不崩溃。"""
+        tmp_config.set("api_key", "sk-test")
+
+        mock_resp = MagicMock()
+        mock_resp.choices = []  # 空 choices
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_resp
+
+        with patch("src.services.ai_client.OpenAI", return_value=mock_client):
+            result = AIClient(tmp_config).generate_report(
+                [make_entry(content="任务")]
+            )
+
+        assert result == ""
+
+
+class TestConfigSanitization:
+    """generate_report 对配置值做清理（换行符、空格）。"""
+
+    def test_model_with_newline_is_stripped(self, tmp_config):
+        """api_model 含换行符时自动 strip，传递给 OpenAI 的值不含换行。"""
+        tmp_config.set("api_key", "sk-test")
+        tmp_config.set("api_model", "\ngpt-4o\n")  # 含换行符
+
+        mock_resp = MagicMock()
+        mock_resp.choices = [MagicMock()]
+        mock_resp.choices[0].message.content = "ok"
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_resp
+
+        with patch("src.services.ai_client.OpenAI", return_value=mock_client):
+            AIClient(tmp_config).generate_report([make_entry(content="任务")])
+
+        kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert kwargs["model"] == "gpt-4o"  # 换行符被 strip
+
+    def test_base_url_with_chat_completions_is_normalized(self, tmp_config):
+        """api_base_url 含 /chat/completions 时自动清理。"""
+        tmp_config.set("api_key", "sk-test")
+        tmp_config.set("api_base_url", "https://host/v1/chat/completions")
+
+        mock_resp = MagicMock()
+        mock_resp.choices = [MagicMock()]
+        mock_resp.choices[0].message.content = "ok"
+
+        mock_client_cls = MagicMock()
+        mock_client_cls.return_value.chat.completions.create.return_value = mock_resp
+
+        with patch("src.services.ai_client.OpenAI", mock_client_cls):
+            AIClient(tmp_config).generate_report([make_entry(content="任务")])
+
+        # OpenAI 构造时 base_url 应已清理
+        call_kwargs = mock_client_cls.call_args.kwargs
+        assert call_kwargs["base_url"] == "https://host/v1"
