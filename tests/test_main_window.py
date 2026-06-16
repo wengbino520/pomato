@@ -64,3 +64,61 @@ def test_main_window_filters_entries_by_selected_date(qapp, tmp_db):
     assert first_entry is not None
     assert first_entry.entry["date"] == yesterday.isoformat()
     assert window.date_label.text().startswith(yesterday.isoformat())
+
+
+# ── EntryItem expand/collapse toggle tests ────────────────────────────────────
+
+def _make_entry(content="测试内容", skipped=False, tags=None):
+    return {
+        "id": 1, "session_no": 1,
+        "start_time": "09:00:00", "end_time": "09:25:00",
+        "content": content, "tags": tags or [], "skipped": skipped,
+        "date": "2026-06-16", "todo_title": None,
+    }
+
+
+class TestEntryItemToggle:
+    """EntryItem 展开/收起功能测试。"""
+
+    def test_content_label_starts_single_line(self, qapp):
+        """新建 EntryItem 时 content_lbl 为 WordWrap(False)（单行截断）。"""
+        item = EntryItem(_make_entry(content="这是一段很长的测试内容"))
+        assert item._content_lbl.wordWrap() is False
+
+    def test_toggle_visible_for_non_empty_content(self, qapp):
+        """有内容且非 skipped 时，▼ 按钮可见。"""
+        item = EntryItem(_make_entry(content="有内容"))
+        assert not item._toggle_btn.isHidden()
+        assert item._toggle_btn.text() == "▼"
+
+    def test_toggle_hidden_for_empty_content(self, qapp):
+        """内容为空时，▼ 按钮隐藏。"""
+        item = EntryItem(_make_entry(content=""))
+        assert item._toggle_btn.isHidden()
+
+    def test_toggle_hidden_for_skipped_entry(self, qapp):
+        """已跳过的条目，▼ 按钮隐藏。"""
+        item = EntryItem(_make_entry(content="内容", skipped=True))
+        assert item._toggle_btn.isHidden()
+
+    def test_expand_enables_word_wrap(self, qapp):
+        """点击 ▼ 后展开，WordWrap 变为 True。"""
+        item = EntryItem(_make_entry(content="有内容"))
+        item._toggle_btn.click()
+        assert item._content_lbl.wordWrap() is True
+        assert item._toggle_btn.text() == "▲"
+
+    def test_collapse_after_expand(self, qapp):
+        """展开后再点击 ▲ 收起，恢复单行。"""
+        item = EntryItem(_make_entry(content="有内容"))
+        item._toggle_btn.click()  # expand
+        item._toggle_btn.click()  # collapse
+        assert item._content_lbl.wordWrap() is False
+        assert item._toggle_btn.text() == "▼"
+
+    def test_tooltip_changes_on_toggle(self, qapp):
+        """展开/收起时 tooltip 同步切换。"""
+        item = EntryItem(_make_entry(content="有内容"))
+        assert "展开" in item._toggle_btn.toolTip()
+        item._toggle_btn.click()
+        assert "收起" in item._toggle_btn.toolTip()

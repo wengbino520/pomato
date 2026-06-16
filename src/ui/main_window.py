@@ -256,18 +256,33 @@ class EntryItem(QFrame):
         time_lbl.setStyleSheet("color:#999; font-size:11px;")
         time_lbl.setFixedWidth(94)
 
-        # Content
+        # Content (collapsible: single-line truncated by default, expand via ▼/▲)
         if entry.get("skipped"):
             text, style = "（已跳过）", "color:#ccc; font-size:13px;"
         else:
             text = entry.get("content") or ""
             style = "color:#333; font-size:13px;"
+        self._full_text = text
+
         content_lbl = QLabel(text)
         content_lbl.setStyleSheet(style)
-        content_lbl.setWordWrap(True)
+        content_lbl.setWordWrap(False)  # single-line by default
         content_lbl.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
         )
+        self._content_lbl = content_lbl
+
+        # Expand/collapse toggle (only for non-empty, non-skipped entries)
+        self._expanded = False
+        self._toggle_btn = QPushButton()
+        self._toggle_btn.setFixedSize(18, 18)
+        self._toggle_btn.setStyleSheet(
+            "QPushButton{border:none;color:#bbb;font-size:9px;"
+            "background:transparent;padding:0;}"
+            "QPushButton:hover{color:#ef5350;}"
+        )
+        self._toggle_btn.clicked.connect(self._toggle_expand)
+        self._update_toggle_visibility()
 
         # Tags
         tags_str = "  ".join(f"[{t}]" for t in entry.get("tags", []))
@@ -305,12 +320,37 @@ class EntryItem(QFrame):
 
         layout.addWidget(badge)
         layout.addWidget(time_lbl)
-        layout.addWidget(content_lbl)
+        layout.addWidget(self._content_lbl)
+        layout.addWidget(self._toggle_btn)
         layout.addWidget(tags_lbl)
         if todo_title:
             layout.addWidget(todo_lbl)
         layout.addWidget(edit_btn)
         layout.addWidget(del_btn)
+
+    def _update_toggle_visibility(self):
+        """Show toggle only when content has meaningful text."""
+        text = (self.entry.get("content") or "").strip()
+        show = bool(text) and not self.entry.get("skipped")
+        self._toggle_btn.setVisible(show)
+        if show:
+            self._expanded = False
+            self._toggle_btn.setText("▼")
+            self._toggle_btn.setToolTip("展开查看全文")
+
+    def _toggle_expand(self):
+        """Expand/collapse the content label between single-line and full text."""
+        self._expanded = not self._expanded
+        if self._expanded:
+            self._content_lbl.setWordWrap(True)
+            self._content_lbl.setMinimumHeight(0)
+            self._content_lbl.setMaximumHeight(16777215)  # unconstrained
+            self._toggle_btn.setText("▲")
+            self._toggle_btn.setToolTip("收起")
+        else:
+            self._content_lbl.setWordWrap(False)
+            self._toggle_btn.setText("▼")
+            self._toggle_btn.setToolTip("展开查看全文")
 
 
 class MainWindow(QMainWindow):
