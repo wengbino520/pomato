@@ -236,7 +236,6 @@ class TestGetTodosByDateRange:
 
         today = dt_date.today()
         monday = today - timedelta(days=today.weekday())
-        sunday = monday + timedelta(days=6)
         long_ago = (today - timedelta(days=30)).isoformat()
 
         # 插入一个很久以前的未完成待办
@@ -245,7 +244,8 @@ class TestGetTodosByDateRange:
         tid_done = tmp_db.add_todo("旧已完成", todo_date=long_ago)
         tmp_db.update_todo(tid_done, status="done")
 
-        result = tmp_db.get_todos_by_date_range(monday.isoformat(), sunday.isoformat())
+        # end_date 为今天（不是周日），触发历史累积
+        result = tmp_db.get_todos_by_date_range(monday.isoformat(), today.isoformat())
 
         titles = [t["title"] for t in result]
         # 本周范围内没有待办 → 只有历史未完成的会被累积进来
