@@ -145,21 +145,23 @@ class Config:
                 winreg.HKEY_CURRENT_USER,
                 WINDOWS_RUN_KEY,
                 0,
-                winreg.KEY_SET_VALUE,
+                winreg.KEY_SET_VALUE | winreg.KEY_QUERY_VALUE,
             )
             try:
                 if enabled:
                     command = self._build_autostart_command()
                     winreg.SetValueEx(key, AUTOSTART_APP_NAME, 0, winreg.REG_SZ, command)
+                    logger.info("Autostart registered: %s", command)
                 else:
                     try:
                         winreg.DeleteValue(key, AUTOSTART_APP_NAME)
+                        logger.info("Autostart removed from registry")
                     except FileNotFoundError:
-                        pass
+                        logger.debug("Autostart key not found, nothing to remove")
             finally:
                 winreg.CloseKey(key)
         except Exception:
-            pass
+            logger.exception("Failed to sync autostart registry key")
 
     def _sync_autostart_linux(self, enabled: bool):
         autostart_dir = Path.home() / ".config" / "autostart"
@@ -188,7 +190,8 @@ class Config:
         if getattr(sys, "frozen", False):
             return f'"{sys.executable}"'
 
-        project_root = Path(__file__).resolve().parent.parent
+        # config.py 在 src/core/ 下，需要上 3 层到项目根
+        project_root = Path(__file__).resolve().parent.parent.parent
         main_py = project_root / "main.py"
 
         # Use pythonw.exe on Windows to suppress the console window
@@ -204,6 +207,6 @@ class Config:
         if getattr(sys, "frozen", False):
             return sys.executable
 
-        project_root = Path(__file__).resolve().parent.parent
+        project_root = Path(__file__).resolve().parent.parent.parent
         main_py = project_root / "main.py"
         return f"{sys.executable} {main_py}"
