@@ -12,8 +12,8 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
-    QScrollArea,
     QSpinBox,
+    QTabWidget,
     QTextEdit,
     QTimeEdit,
     QVBoxLayout,
@@ -36,7 +36,7 @@ class SettingsWindow(QDialog):
     def _setup_ui(self):
         self.setWindowTitle("POMATO · 设置")
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowStaysOnTopHint)
-        self.resize(460, 580)
+        self.resize(480, 440)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -46,16 +46,23 @@ class SettingsWindow(QDialog):
         title.setStyleSheet("font-size:16px; font-weight:bold; color:#333;")
         layout.addWidget(title)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border:none; }")
+        tabs = QTabWidget()
+        tabs.setStyleSheet(
+            "QTabWidget::pane { border: 1px solid #ddd; border-radius: 6px;"
+            " background: white; }"
+            "QTabBar::tab { padding: 8px 18px; border: 1px solid #ddd;"
+            " border-bottom: none; border-top-left-radius: 6px;"
+            " border-top-right-radius: 6px; background: #f5f5f5;"
+            " margin-right: 2px; }"
+            "QTabBar::tab:selected { background: white; font-weight: bold; }"
+        )
 
-        content = QWidget()
-        cl = QVBoxLayout(content)
-        cl.setSpacing(12)
+        # ── Tab 1: 计时 ─────────────────────────────────────────────
+        timer_page = QWidget()
+        t1 = QVBoxLayout(timer_page)
+        t1.setContentsMargins(16, 16, 16, 16)
 
-        # ── Timer settings ─────────────────────────────────────────────
-        timer_group = QGroupBox("计时设置")
+        timer_group = QGroupBox("工作时间与番茄钟")
         tf = QFormLayout(timer_group)
 
         self.start_time = QTimeEdit()
@@ -86,10 +93,16 @@ class SettingsWindow(QDialog):
         self.long_interval.setSuffix(" 个番茄后")
         tf.addRow("长休息间隔：", self.long_interval)
 
-        cl.addWidget(timer_group)
+        t1.addWidget(timer_group)
+        t1.addStretch()
+        tabs.addTab(timer_page, "  ⏱  计时  ")
 
-        # ── AI settings ────────────────────────────────────────────────
-        ai_group = QGroupBox("AI 设置")
+        # ── Tab 2: AI 日报 ──────────────────────────────────────────
+        ai_page = QWidget()
+        a1 = QVBoxLayout(ai_page)
+        a1.setContentsMargins(16, 16, 16, 16)
+
+        ai_group = QGroupBox("AI 日报")
         af = QFormLayout(ai_group)
 
         self.api_base = QLineEdit()
@@ -123,47 +136,21 @@ class SettingsWindow(QDialog):
         ollama_row.addStretch()
         af.addRow("", ollama_row)
 
-        cl.addWidget(ai_group)
+        a1.addWidget(ai_group)
+        a1.addStretch()
+        tabs.addTab(ai_page, "  🤖  AI 日报  ")
 
-        # ── Misc ────────────────────────────────────────────────────────
-        misc_group = QGroupBox("其他")
-        mf = QFormLayout(misc_group)
-        self.sound_enabled = QCheckBox("启用提示音")
-        mf.addRow("", self.sound_enabled)
+        # ── Tab 3: 提醒与标签 ───────────────────────────────────────
+        rt_page = QWidget()
+        r1 = QVBoxLayout(rt_page)
+        r1.setContentsMargins(16, 16, 16, 16)
 
-        self.autostart_enabled = QCheckBox("开机自启动")
-        mf.addRow("", self.autostart_enabled)
-
-        self.holiday_check = QCheckBox("自动识别法定节假日（非工作日不计时）")
-        self.holiday_check.setToolTip("通过 timor.tech API 获取中国法定节假日数据，\n法定假日及调休日自动识别。")
-        mf.addRow("", self.holiday_check)
-
-        self.popup_timeout = QSpinBox()
-        self.popup_timeout.setRange(30, 600)
-        self.popup_timeout.setSuffix(" 秒")
-        mf.addRow("弹窗自动超时：", self.popup_timeout)
-
-        # ---- TASK-18: 待办/提醒配置项 ----
-        self.todo_carry_over = QCheckBox("未完成待办自动结转至次日")
-        mf.addRow("", self.todo_carry_over)
-
-        self.reminder_silent = QCheckBox("非工作时间提醒静默")
-        mf.addRow("", self.reminder_silent)
-
-        self.reminder_timeout = QSpinBox()
-        self.reminder_timeout.setRange(30, 600)
-        self.reminder_timeout.setSuffix(" 秒")
-        mf.addRow("提醒弹窗超时：", self.reminder_timeout)
-
-        cl.addWidget(misc_group)
-
-        # ---- TASK-19: 提醒管理分组 ----
         if self._reminder_engine:
             reminder_group = QGroupBox("提醒管理")
             rl = QVBoxLayout(reminder_group)
 
             self.reminder_list = QListWidget()
-            self.reminder_list.setMaximumHeight(140)
+            self.reminder_list.setMaximumHeight(130)
             self.reminder_list.setStyleSheet(
                 "QListWidget{border:1px solid #ddd;border-radius:4px;}"
                 "QListWidget::item{padding:4px;}"
@@ -206,14 +193,15 @@ class SettingsWindow(QDialog):
             btn_row.addWidget(del_r_btn)
             btn_row.addStretch()
             rl.addLayout(btn_row)
-            cl.addWidget(reminder_group)
+            r1.addWidget(reminder_group)
+        else:
+            self.reminder_list = None
 
-        # ── Tags ────────────────────────────────────────────────────────
         tags_group = QGroupBox("自定义标签")
         tl = QVBoxLayout(tags_group)
 
         self.tag_list = QListWidget()
-        self.tag_list.setMaximumHeight(120)
+        self.tag_list.setMaximumHeight(110)
         self.tag_list.setStyleSheet(
             "QListWidget{border:1px solid #ddd;border-radius:4px;}"
             "QListWidget::item{padding:4px;}"
@@ -242,11 +230,50 @@ class SettingsWindow(QDialog):
         tag_input_row.addWidget(add_tag_btn)
         tag_input_row.addWidget(del_tag_btn)
         tl.addLayout(tag_input_row)
-        cl.addWidget(tags_group)
+        r1.addWidget(tags_group)
+        r1.addStretch()
+        tabs.addTab(rt_page, "  🔔  提醒与标签  ")
 
-        cl.addStretch()
-        scroll.setWidget(content)
-        layout.addWidget(scroll, 1)
+        # ── Tab 4: 其他 ─────────────────────────────────────────────
+        misc_page = QWidget()
+        m1 = QVBoxLayout(misc_page)
+        m1.setContentsMargins(16, 16, 16, 16)
+
+        misc_group = QGroupBox("通用选项")
+        mf = QFormLayout(misc_group)
+        self.sound_enabled = QCheckBox("启用提示音")
+        mf.addRow("", self.sound_enabled)
+
+        self.autostart_enabled = QCheckBox("开机自启动")
+        mf.addRow("", self.autostart_enabled)
+
+        self.holiday_check = QCheckBox("自动识别法定节假日（非工作日不计时）")
+        self.holiday_check.setToolTip(
+            "通过 timor.tech API 获取中国法定节假日数据，\n法定假日及调休日自动识别。"
+        )
+        mf.addRow("", self.holiday_check)
+
+        self.popup_timeout = QSpinBox()
+        self.popup_timeout.setRange(30, 600)
+        self.popup_timeout.setSuffix(" 秒")
+        mf.addRow("弹窗自动超时：", self.popup_timeout)
+
+        self.todo_carry_over = QCheckBox("未完成待办自动结转至次日")
+        mf.addRow("", self.todo_carry_over)
+
+        self.reminder_silent = QCheckBox("非工作时间提醒静默")
+        mf.addRow("", self.reminder_silent)
+
+        self.reminder_timeout = QSpinBox()
+        self.reminder_timeout.setRange(30, 600)
+        self.reminder_timeout.setSuffix(" 秒")
+        mf.addRow("提醒弹窗超时：", self.reminder_timeout)
+
+        m1.addWidget(misc_group)
+        m1.addStretch()
+        tabs.addTab(misc_page, "  ⚙  其他  ")
+
+        layout.addWidget(tabs, 1)
 
         # ── Buttons ────────────────────────────────────────────────────
         bl = QHBoxLayout()
