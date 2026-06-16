@@ -239,7 +239,15 @@ class TodoListWidget(QWidget):
 
     def _on_toggle(self, todo_id: int, checked: bool):
         status = "done" if checked else "pending"
-        self._engine.update_todo(todo_id, status=status)
+        todo = self._engine.db.get_todo(todo_id)
+        today = QDate.currentDate().toString("yyyy-MM-dd")
+        updates = {"status": status}
+        # 今日视图中勾选过去的累计待办：将 todo_date 移到今天，避免
+        # get_todos 累积查询的 status!='done' 条件导致条目消失
+        if (todo and checked and self._current_date == today
+                and todo.get("todo_date", "") < today):
+            updates["todo_date"] = today
+        self._engine.update_todo(todo_id, **updates)
         logger.debug("Todo toggled: id=%d, status=%s", todo_id, status)
 
     def _on_edit(self, todo_id: int):
