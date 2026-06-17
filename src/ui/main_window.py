@@ -280,11 +280,16 @@ class EntryItem(QFrame):
         # Expand/collapse toggle (only for non-empty, non-skipped entries)
         self._expanded = False
         self._toggle_btn = QPushButton()
-        self._toggle_btn.setFixedSize(18, 18)
+        self._toggle_btn.setFixedWidth(24)
+        self._toggle_btn.setMinimumHeight(18)
+        # Preferred vertical: fills row height when row grows, stays minimal when collapsed
+        self._toggle_btn.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred
+        )
         self._toggle_btn.setStyleSheet(
-            "QPushButton{border:none;color:#bbb;font-size:9px;"
+            "QPushButton{border:none;color:#bbb;font-size:10px;"
             "background:transparent;padding:0;}"
-            "QPushButton:hover{color:#ef5350;}"
+            "QPushButton:hover{color:#ef5350;background:rgba(239,83,80,0.06);}"
         )
         self._toggle_btn.clicked.connect(self._toggle_expand)
         self._update_toggle_visibility()
@@ -374,6 +379,7 @@ class EntryItem(QFrame):
             self._apply_elide()
             self._toggle_btn.setText("▼")
             self._toggle_btn.setToolTip("展开查看全文")
+
 
 
 class MainWindow(QMainWindow):
