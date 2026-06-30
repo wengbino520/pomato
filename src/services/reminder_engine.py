@@ -6,7 +6,7 @@ reminder_engine.py — 待办管理 + 定时提醒引擎
 - 内存中维护已加载的提醒列表，tick 时仅做时间比较
 - 提醒触发信号通过 TrayManager 连接到弹窗
 """
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from enum import Enum
 from PyQt6.QtCore import QObject, pyqtSignal
 
@@ -50,6 +50,13 @@ class ReminderEngine(QObject):
         """从 DB 重载所有启用的提醒到内存。"""
         today = date.today().isoformat()
         self._reminders = self.db.get_enabled_reminders()
+        # 清理跨天过期的 snoozed_until
+        for r in self._reminders:
+            su = r.get("snoozed_until")
+            if su and su[:10] < today:
+                self.db.update_reminder(r["id"], snoozed_until=None)
+                r["snoozed_until"] = None
+                logger.debug("Cleared expired snooze for reminder id=%d", r["id"])
         self._triggered_today = {
             r["id"] for r in self._reminders
             if r.get("last_triggered") == today
@@ -75,17 +82,15 @@ class ReminderEngine(QObject):
         return self.db.get_all_reminders()
 
     def snooze_reminder(self, reminder_id):
-        """延后提醒。"""
+        """延后提醒。不修改 remind_time，仅设置 snoozed_until 临时跳过窗口。"""
         r = self.db.get_reminder(reminder_id)
         if not r:
             return
         snooze_min = r.get("snooze_min", 10)
         now = datetime.now()
-        new_minutes = (now.hour * 60 + now.minute + snooze_min) % (24 * 60)
-        h, m = divmod(new_minutes, 60)
-        new_time_str = f"{h:02d}:{m:02d}"
+        snoozed_until = (now + timedelta(minutes=snooze_min)).isoformat()
         self.db.update_reminder(reminder_id,
-                                remind_time=new_time_str,
+                                snoozed_until=snoozed_until,
                                 last_triggered=None)
         self._reload_reminders()
 
@@ -158,6 +163,17 @@ class ReminderEngine(QObject):
         for r in self._reminders:
             if r["id"] in self._triggered_today:
                 continue
+
+            # Snooze 窗口检查：在延后期间跳过
+            snoozed_until = r.get("snoozed_until")
+            if snoozed_until:
+                if now.isoformat() < snoozed_until:
+                    continue
+                # Snooze 窗口已过期，清除状态
+                self.db.update_reminder(r["id"], snoozed_until=None)
+                r["snoozed_until"] = None
+                logger.debug("Snooze expired for reminder id=%d", r["id"])
+
             if r["remind_time"] != current_time_str:
                 continue
 

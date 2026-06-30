@@ -137,6 +137,27 @@ class TestUpdateReminder:
         rid = tmp_db.add_reminder("T", "10:00")
         tmp_db.update_reminder(rid, bad_field=123)  # should not crash
 
+    def test_update_snoozed_until(self, tmp_db):
+        """允许写入和读取 snoozed_until 字段。"""
+        rid = tmp_db.add_reminder("测试提醒", "10:00")
+        tmp_db.update_reminder(rid, snoozed_until="2026-06-30T10:10:00")
+        r = tmp_db.get_reminder(rid)
+        assert r["snoozed_until"] == "2026-06-30T10:10:00"
+
+    def test_snoozed_until_null_by_default(self, tmp_db):
+        """新增提醒的 snoozed_until 默认为 NULL。"""
+        rid = tmp_db.add_reminder("新提醒", "15:00")
+        r = tmp_db.get_reminder(rid)
+        assert r["snoozed_until"] is None
+
+    def test_clear_snoozed_until(self, tmp_db):
+        """可将 snoozed_until 置为 None 清除状态。"""
+        rid = tmp_db.add_reminder("测试", "10:00")
+        tmp_db.update_reminder(rid, snoozed_until="2026-06-30T10:10:00")
+        tmp_db.update_reminder(rid, snoozed_until=None)
+        r = tmp_db.get_reminder(rid)
+        assert r["snoozed_until"] is None
+
 
 class TestDeleteReminder:
     """delete_reminder 删除。"""

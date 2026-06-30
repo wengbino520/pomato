@@ -292,20 +292,20 @@ class TestReminderFlow:
         assert blocker.args[0] == rid
         assert blocker.args[1] == "立即触发测试"
 
-    def test_snooze_updates_last_triggered(self, engine, tmp_db):
-        """打盹后 last_triggered 更新为今天。"""
+    def test_snooze_sets_snoozed_until(self, engine, tmp_db):
+        """snooze 后 snoozed_until 字段被设置，remind_time 不变。"""
         today = date.today().isoformat()
         rid = engine.add_reminder(
             title="打盹测试",
             remind_time="14:00",
             repeat_type="daily",
         )
-        # 模拟打盹：标记今天已触发
-        engine._triggered_today.add(rid)
-        tmp_db.update_reminder(rid, last_triggered=today)
+        # 模拟 snooze
+        tmp_db.update_reminder(rid, snoozed_until=f"{today}T14:10:00")
 
         reminder = tmp_db.get_reminder(rid)
-        assert reminder["last_triggered"] == today
+        assert reminder["snoozed_until"] == f"{today}T14:10:00"
+        assert reminder["remind_time"] == "14:00"
 
     def test_disable_reminder_stops_trigger(self, engine, tmp_db):
         """禁用提醒后不再触发。"""

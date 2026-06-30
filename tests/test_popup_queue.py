@@ -202,12 +202,13 @@ class TestPopupQueueSnooze:
     """snooze 回调。"""
 
     def test_snooze_calls_engine(self, tray_mgr, reminder_engine):
-        """snooze 回调调用 reminder_engine.snooze_reminder。"""
+        """snooze 回调调用 reminder_engine.snooze_reminder，不修改 remind_time。"""
         rid = reminder_engine.add_reminder("测试", "10:00")
         tray_mgr._on_reminder_snoozed(rid)
         r = tray_mgr.db.get_reminder(rid)
-        # snooze 会把时间 +10min
-        assert r["remind_time"] != "10:00"
+        # snooze 不改 remind_time，但会设置 snoozed_until
+        assert r["remind_time"] == "10:00"
+        assert r["snoozed_until"] is not None
 
     def test_snooze_no_engine_does_not_crash(self, tray_mgr):
         """无 reminder_engine 时 snooze 静默。"""

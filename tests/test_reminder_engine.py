@@ -304,18 +304,32 @@ class TestReminderDisabled:
 
 
 class TestReminderSnooze:
-    """snooze_reminder 延后逻辑。"""
+    """snooze_reminder 延后逻辑 — 不修改 remind_time。"""
 
-    def test_snooze_changes_time(self, reminder_engine):
+    def test_snooze_preserves_original_time(self, reminder_engine):
+        """snooze 后 remind_time 保持原值不变。"""
         mock_dt, mock_d = _mock_now(2026, 6, 9, 10, 0)
         with patch("src.services.reminder_engine.datetime", mock_dt), \
              patch("src.services.reminder_engine.date", mock_d):
             rid = reminder_engine.add_reminder("延后测试", "10:00")
             reminder_engine.snooze_reminder(rid)
         r = reminder_engine.db.get_reminder(rid)
-        assert r["remind_time"] == "10:10"
+        assert r["remind_time"] == "10:00"
+        assert r["snoozed_until"] is not None
+
+    def test_snooze_sets_snoozed_until(self, reminder_engine):
+        """snooze 后 snoozed_until 为 now + snooze_min。"""
+        mock_dt, mock_d = _mock_now(2026, 6, 9, 10, 0)
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
+            rid = reminder_engine.add_reminder("延后测试", "10:00", snooze_min=10)
+            reminder_engine.snooze_reminder(rid)
+        r = reminder_engine.db.get_reminder(rid)
+        # snoozed_until should be ~10 minutes after 10:00
+        assert r["snoozed_until"] == "2026-06-09T10:10:00"
 
     def test_snooze_clears_last_triggered(self, reminder_engine):
+        """snooze 后 last_triggered 被置为 None（允许当日再次触发）。"""
         rid = reminder_engine.add_reminder("X", "10:00")
         reminder_engine.db.mark_reminder_triggered(rid, "2026-06-09")
         mock_dt, mock_d = _mock_now(2026, 6, 9, 10, 1)
@@ -324,6 +338,78 @@ class TestReminderSnooze:
             reminder_engine.snooze_reminder(rid)
         r = reminder_engine.db.get_reminder(rid)
         assert r["last_triggered"] is None
+
+
+class TestSnoozeWindow:
+    """Snooze 窗口内不触发，窗口外恢复触发。"""
+
+    def test_within_snooze_window_no_trigger(self, reminder_engine):
+        """snoozed_until 未到期时，即使时间匹配也不触发。"""
+        mock_dt, mock_d = _mock_now(2026, 6, 9, 10, 0)
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
+            rid = reminder_engine.add_reminder("延后提醒", "10:00")
+            # 手动设置 snoozed_until 为 10:05（还未到期）
+            reminder_engine.db.update_reminder(rid, snoozed_until="2026-06-09T10:05:00")
+            reminder_engine._reload_reminders()
+
+        spy = spy_signal(reminder_engine.reminder_triggered)
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
+            reminder_engine.on_tick()
+        assert len(spy) == 0
+
+    def test_snooze_window_expired_triggers(self, reminder_engine):
+        """snoozed_until 到期后正常触发。"""
+        rid = reminder_engine.add_reminder("延后提醒", "10:00")
+        # snoozed_until 已过期（09:55 < 10:00）
+        reminder_engine.db.update_reminder(rid, snoozed_until="2026-06-09T09:55:00")
+        reminder_engine._reload_reminders()
+
+        mock_dt, mock_d = _mock_now(2026, 6, 9, 10, 0)
+        spy = spy_signal(reminder_engine.reminder_triggered)
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
+            reminder_engine.on_tick()
+        assert len(spy) == 1
+        # snoozed_until 应已被清除
+        r = reminder_engine.db.get_reminder(rid)
+        assert r["snoozed_until"] is None
+
+    def test_daily_repeat_time_preserved_after_snooze(self, reminder_engine):
+        """每天重复提醒 snooze 后，remind_time 不被破坏。"""
+        mock_dt, mock_d = _mock_now(2026, 6, 9, 21, 0)
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
+            rid = reminder_engine.add_reminder("晚间提醒", "21:00", repeat_type="daily")
+            reminder_engine.snooze_reminder(rid)
+        r = reminder_engine.db.get_reminder(rid)
+        # remind_time 必须保持为 21:00
+        assert r["remind_time"] == "21:00"
+        assert r["snoozed_until"] is not None
+
+    def test_cross_day_clears_snooze(self, reminder_engine):
+        """跨天后 snoozed_until 在 _reload_reminders 中被清除。"""
+        rid = reminder_engine.add_reminder("提醒", "10:00")
+        # 设置昨天的 snoozed_until
+        reminder_engine.db.update_reminder(rid, snoozed_until="2026-06-08T22:00:00")
+
+        mock_dt, mock_d = _mock_now(2026, 6, 9, 9, 0)
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
+            reminder_engine._reload_reminders()
+        r = reminder_engine.db.get_reminder(rid)
+        assert r["snoozed_until"] is None
+
+    def test_no_snoozed_until_still_triggers(self, reminder_engine):
+        """无 snoozed_until 的提醒正常触发（向后兼容）。"""
+        reminder_engine.add_reminder("正常提醒", "10:00")
+        mock_dt, mock_d = _mock_now(2026, 6, 9, 10, 0)
+        spy = spy_signal(reminder_engine.reminder_triggered)
+        with patch("src.services.reminder_engine.datetime", mock_dt), \
+             patch("src.services.reminder_engine.date", mock_d):
+            reminder_engine.on_tick()
+        assert len(spy) == 1
 
 
 class TestSilentOutsideWork:

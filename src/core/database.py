@@ -165,6 +165,12 @@ class Database:
                 ") WHERE todo_id IS NULL"
             )
 
+            # Migration: add snoozed_until column for non-destructive snooze (Issue #2 fix)
+            try:
+                conn.execute("ALTER TABLE reminders ADD COLUMN snoozed_until TEXT")
+            except sqlite3.OperationalError:
+                logger.debug("Migration: snoozed_until column already exists")
+
             # Migration (D2-B): add period column + change UNIQUE constraint
             try:
                 conn.execute("SELECT period FROM daily_reports LIMIT 1")
@@ -609,7 +615,8 @@ class Database:
         if not kwargs:
             return
         allowed = {"title", "remind_time", "remind_date", "repeat_type",
-                   "repeat_days", "enabled", "snooze_min", "last_triggered"}
+                   "repeat_days", "enabled", "snooze_min", "last_triggered",
+                   "snoozed_until"}
         updates = {k: v for k, v in kwargs.items() if k in allowed}
         if not updates:
             return
