@@ -258,9 +258,6 @@ class SettingsWindow(QDialog):
         self.popup_timeout.setSuffix(" 秒")
         mf.addRow("弹窗自动超时：", self.popup_timeout)
 
-        self.todo_carry_over = QCheckBox("未完成待办自动结转至次日")
-        mf.addRow("", self.todo_carry_over)
-
         self.reminder_silent = QCheckBox("非工作时间提醒静默")
         mf.addRow("", self.reminder_silent)
 
@@ -322,7 +319,6 @@ class SettingsWindow(QDialog):
         self.popup_timeout.setValue(self.config.get("popup_timeout_seconds", 180))
 
         # TASK-18: 新配置项
-        self.todo_carry_over.setChecked(self.config.get("todo_auto_carry_over", True))
         self.reminder_silent.setChecked(self.config.get("reminder_silent_outside_work", False))
         self.reminder_timeout.setValue(self.config.get("reminder_popup_timeout_seconds", 120))
 
@@ -351,7 +347,6 @@ class SettingsWindow(QDialog):
         self.config.set("autostart_enabled", self.autostart_enabled.isChecked())
         self.config.set("holiday_check_enabled", self.holiday_check.isChecked())
         self.config.set("popup_timeout_seconds", self.popup_timeout.value())
-        self.config.set("todo_auto_carry_over", self.todo_carry_over.isChecked())
         self.config.set("reminder_silent_outside_work", self.reminder_silent.isChecked())
         self.config.set("reminder_popup_timeout_seconds", self.reminder_timeout.value())
         self.config.sync_autostart()

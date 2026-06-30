@@ -27,7 +27,6 @@ DEFAULT_CONFIG = {
     "autostart_enabled": True,
     "popup_timeout_seconds": 180,
     "holiday_check_enabled": True,
-    "todo_auto_carry_over": True,
     "reminder_silent_outside_work": False,
     "reminder_popup_timeout_seconds": 120,
     "show_completed_todos": True,

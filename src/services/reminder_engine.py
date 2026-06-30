@@ -120,22 +120,6 @@ class ReminderEngine(QObject):
         self.todos_changed.emit()
 
     # ================================================================
-    # 自动结转 (TASK-07)
-    # ================================================================
-
-    def carry_over_pending_todos(self):
-        """将昨日未完成的待办结转至今日。"""
-        if not self.config.get("todo_auto_carry_over", True):
-            return
-        today = date.today()
-        from datetime import timedelta
-        yesterday = (today - timedelta(days=1)).isoformat()
-        today_str = today.isoformat()
-        count = self.db.carry_over_todos(yesterday, today_str)
-        if count > 0:
-            self.todos_changed.emit()
-
-    # ================================================================
     # 每秒 tick（由 TimerEngine 的 QTimer 触发）(TASK-06)
     # ================================================================
 
@@ -146,9 +130,8 @@ class ReminderEngine(QObject):
         current_time_str = f"{now.hour:02d}:{now.minute:02d}"
         weekday = now.weekday()  # 0=Mon
 
-        # ---- 日期变更检测 + 自动结转 (TASK-07) ----
+        # ---- 日期变更检测 ----
         if self._last_date is not None and self._last_date != today_str:
-            self.carry_over_pending_todos()
             self._reload_reminders()
         self._last_date = today_str
 
