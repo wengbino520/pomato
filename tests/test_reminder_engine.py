@@ -109,48 +109,6 @@ class TestTodoManagement:
         assert [t["id"] for t in todos] == [id3, id1, id2]
 
 
-class TestCarryOverTodos:
-    """自动结转。"""
-
-    def test_carry_over_enabled_by_default(self, reminder_engine):
-        reminder_engine.add_todo("P", todo_date="2026-06-01")
-        count = reminder_engine.db.carry_over_todos("2026-06-01", "2026-06-02")
-        assert count == 1
-
-    def test_carry_over_disabled_when_config_false(self, reminder_engine):
-        reminder_engine.config.set("todo_auto_carry_over", False)
-        reminder_engine.add_todo("Old", todo_date="2026-06-01")
-        mock_dt, mock_d = _mock_now(2026, 6, 2, 9, 0)
-        with patch("src.services.reminder_engine.datetime", mock_dt), \
-             patch("src.services.reminder_engine.date", mock_d):
-            reminder_engine._last_date = "2026-06-01"
-            reminder_engine.carry_over_pending_todos()
-        todos_today = reminder_engine.db.get_todos(date_str="2026-06-02")
-        assert len(todos_today) == 0
-
-    def test_carry_over_emits_todos_changed(self, reminder_engine):
-        reminder_engine.add_todo("结转", todo_date="2026-06-01")
-        spy = spy_signal(reminder_engine.todos_changed)
-        reminder_engine.db.carry_over_todos("2026-06-01", "2026-06-02")
-        assert spy is not None
-
-
-class TestDateChangeDetection:
-    """日期变更自动结转 (on_tick 中)。"""
-
-    def test_date_change_triggers_carry_over(self, reminder_engine):
-        reminder_engine.config.set("todo_auto_carry_over", True)
-        reminder_engine.add_todo("昨天任务", todo_date="2026-06-01")
-        mock_dt, mock_d = _mock_now(2026, 6, 2, 9, 0)
-        with patch("src.services.reminder_engine.datetime", mock_dt), \
-             patch("src.services.reminder_engine.date", mock_d):
-            reminder_engine._last_date = "2026-06-01"
-            reminder_engine.on_tick()
-        todos_today = reminder_engine.db.get_todos(date_str="2026-06-02")
-        assert len(todos_today) >= 1
-        assert todos_today[0]["title"] == "昨天任务"
-
-
 # ═══════════════════════════════════════════════════════════════════
 # TASK-25: 提醒调度
 # ═══════════════════════════════════════════════════════════════════

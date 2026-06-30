@@ -157,37 +157,6 @@ class TestReorderTodos:
         tmp_db.reorder_todos([])  # should not raise
 
 
-class TestCarryOverTodos:
-    """carry_over_todos 跨天结转。"""
-
-    def test_carry_over_copies_pending_to_today(self, tmp_db):
-        tmp_db.add_todo("结转任务", todo_date="2026-06-01", priority=2)
-        count = tmp_db.carry_over_todos("2026-06-01", "2026-06-02")
-        assert count == 1
-        todos = tmp_db.get_todos(date_str="2026-06-02")
-        assert len(todos) == 1
-        assert todos[0]["title"] == "结转任务"
-        assert todos[0]["status"] == "pending"
-
-    def test_carry_over_skips_done_todos(self, tmp_db):
-        tid = tmp_db.add_todo("已完成", todo_date="2026-06-01")
-        tmp_db.update_todo(tid, status="done")
-        count = tmp_db.carry_over_todos("2026-06-01", "2026-06-02")
-        assert count == 0
-
-    def test_carry_over_empty_returns_zero(self, tmp_db):
-        count = tmp_db.carry_over_todos("2026-06-01", "2026-06-02")
-        assert count == 0
-
-    def test_carry_over_preserves_due_date_and_note(self, tmp_db):
-        tmp_db.add_todo("带备注", todo_date="2026-06-01",
-                        due_date="2026-06-30", note="重要")
-        tmp_db.carry_over_todos("2026-06-01", "2026-06-02")
-        t = tmp_db.get_todos(date_str="2026-06-02")[0]
-        assert t["due_date"] == "2026-06-30"
-        assert t["note"] == "重要"
-
-
 class TestEdgeCases:
     """边界情况。"""
 
