@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.core.config import Config, DEFAULT_CONFIG
+from src.services import logger as logger_module
 
 
 # ── 正确性测试 ─────────────────────────────────────────────────────────────────
@@ -106,6 +107,16 @@ class TestConfigPersistence:
             c2 = Config()
         assert c2.get("holiday_check_enabled") is False
 
+    def test_explicit_data_dir_overrides_home_directory(self, tmp_path):
+        explicit_dir = tmp_path / "profiles" / "dev-test"
+
+        with patch("pathlib.Path.home", return_value=tmp_path / "home-should-not-be-used"):
+            c = Config(data_dir=explicit_dir)
+
+        assert c.get_data_dir() == explicit_dir
+        assert (explicit_dir / "config.json").exists()
+        assert not (tmp_path / "home-should-not-be-used" / ".pomato" / "config.json").exists()
+
 
 # ── 边界值测试 ─────────────────────────────────────────────────────────────────
 
@@ -174,3 +185,13 @@ class TestConfigExceptionScenarios:
             c = Config()
         # null JSON loads as None; merged with DEFAULT_CONFIG should still work
         assert c.get("work_start_time") is not None
+
+
+class TestLoggingSetup:
+    def test_setup_logging_uses_explicit_log_dir(self, tmp_path):
+        log_dir = tmp_path / "profiles" / "dev-test" / "logs"
+
+        logger_module.setup_logging(log_dir=log_dir, force=True)
+
+        assert logger_module.get_log_dir() == str(log_dir)
+        assert (log_dir / "pomato.log").exists()

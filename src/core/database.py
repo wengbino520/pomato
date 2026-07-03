@@ -12,9 +12,9 @@ logger = get_logger(__name__)
 class Database:
     _MAX_BACKUPS = 7  # 保留最近 7 天的备份
 
-    def __init__(self):
-        self.data_dir = Path.home() / ".pomato"
-        self.data_dir.mkdir(exist_ok=True)
+    def __init__(self, data_dir: Path | None = None):
+        self.data_dir = Path(data_dir) if data_dir else Path.home() / ".pomato"
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = self.data_dir / "pomato.db"
         self._init_db()
         self._backup_db()

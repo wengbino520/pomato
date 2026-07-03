@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QMenu, QMessageBox, QSystemTrayIcon
 
 from src.services.ai_client import AIClient
 from src.services.logger import get_logger
+from src.services.restart_helper import restart_application
 from src.ui.history_window import HistoryWindow
 from src.ui.main_window import MainWindow
 from src.ui.popup_window import PopupWindow
@@ -22,13 +23,17 @@ _STATE_COLORS = {"idle": "#9e9e9e", "work": "#ef5350", "break": "#66bb6a"}
 
 
 class TrayManager(QObject):
-    def __init__(self, app, config, db, timer, reminder_engine=None):
+    def __init__(self, app, config, db, timer, reminder_engine=None,
+                 profile_manager=None, runtime_args=None, current_profile_id=None):
         super().__init__()
         self.app = app
         self.config = config
         self.db = db
         self.timer = timer
         self._reminder_engine = reminder_engine
+        self._profile_manager = profile_manager
+        self._runtime_args = list(runtime_args or [])
+        self._current_profile_id = current_profile_id
         self.ai_client = AIClient(config)
 
         self.tray: QSystemTrayIcon | None = None
@@ -77,6 +82,10 @@ class TrayManager(QObject):
         self.skip_break_action.setVisible(False)
 
         menu.addSeparator()
+
+        if self._profile_manager:
+            profile_settings_action = menu.addAction("🗂  资料空间")
+            profile_settings_action.triggered.connect(self.show_profile_settings)
 
         settings_action = menu.addAction("⚙  设置")
         settings_action.triggered.connect(self.show_settings)
@@ -334,12 +343,55 @@ class TrayManager(QObject):
                            report_date=dt.isoformat(), period=period)
         win.exec()
 
-    def show_settings(self):
-        SettingsWindow(self.config, reminder_engine=self._reminder_engine).exec()
+    def show_settings(self, initial_tab: str = "timer"):
+        SettingsWindow(
+            self.config,
+            reminder_engine=self._reminder_engine,
+            profile_manager=self._profile_manager,
+            on_switch_profile=self.switch_profile_and_restart,
+            current_profile_id=self._current_profile_id,
+            initial_tab=initial_tab,
+        ).exec()
+
+    def show_profile_settings(self):
+        self.show_settings(initial_tab="profile")
 
     def show_history_window(self):
         logger.info("Opening history window")
         HistoryWindow(self.db, ai_client=self.ai_client, config=self.config).exec()
+
+    def switch_profile_and_restart(self, profile_id: str) -> bool:
+        if self._profile_manager is None:
+            raise RuntimeError("ProfileManager is not configured")
+        if not self._profile_manager.has_profile(profile_id):
+            raise ValueError("资料空间不存在")
+
+        previous_profile_id = self._profile_manager.get_active_profile_id()
+        self._profile_manager.set_active_profile_id(profile_id)
+        try:
+            restart_application(self._restart_args_after_profile_switch())
+        except Exception:
+            self._profile_manager.set_active_profile_id(previous_profile_id)
+            logger.exception("Failed to restart after switching profile to %s", profile_id)
+            return False
+
+        self.app.quit()
+        return True
+
+    def _restart_args_after_profile_switch(self) -> list[str]:
+        sanitized_args: list[str] = []
+        skip_next = False
+        for arg in self._runtime_args:
+            if skip_next:
+                skip_next = False
+                continue
+            if arg == "--profile":
+                skip_next = True
+                continue
+            if arg.startswith("--profile="):
+                continue
+            sanitized_args.append(arg)
+        return sanitized_args
 
     # ------------------------------------------------------------------
     # TASK-15/16/17: Reminder popup queue + dialog launchers

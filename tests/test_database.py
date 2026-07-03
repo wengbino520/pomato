@@ -3,6 +3,9 @@ tests/test_database.py
 Database 模块的正确性、边界值和异常场景测试。
 """
 import pytest
+from unittest.mock import patch
+
+from src.core.database import Database
 
 
 # ── 辅助函数 ───────────────────────────────────────────────────────────────────
@@ -278,6 +281,19 @@ class TestDatabaseBoundary:
         for i in range(1, 9):
             add(tmp_db, session_no=i, content=f"任务{i}")
         assert len(tmp_db.get_entries_by_date("2026-06-02")) == 8
+
+
+class TestDatabaseDataDirInjection:
+    def test_explicit_data_dir_overrides_home_directory(self, tmp_path):
+        explicit_dir = tmp_path / "profiles" / "dev-test"
+
+        with patch("pathlib.Path.home", return_value=tmp_path / "home-should-not-be-used"):
+            db = Database(data_dir=explicit_dir)
+
+        assert db.data_dir == explicit_dir
+        assert db.db_path == explicit_dir / "pomato.db"
+        assert (explicit_dir / "pomato.db").exists()
+        assert not (tmp_path / "home-should-not-be-used" / ".pomato" / "pomato.db").exists()
 
 
 # ── 异常场景测试 ───────────────────────────────────────────────────────────────

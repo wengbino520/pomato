@@ -34,9 +34,9 @@ DEFAULT_CONFIG = {
 
 
 class Config:
-    def __init__(self):
-        self.data_dir = Path.home() / ".pomato"
-        self.data_dir.mkdir(exist_ok=True)
+    def __init__(self, data_dir: Path | None = None):
+        self.data_dir = Path(data_dir) if data_dir else Path.home() / ".pomato"
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         self.config_file = self.data_dir / "config.json"
         self._data = {}
         self.load()

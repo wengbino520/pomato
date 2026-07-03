@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -26,17 +27,24 @@ logger = get_logger(__name__)
 
 
 class SettingsWindow(QDialog):
-    def __init__(self, config, parent=None, reminder_engine=None):
+    def __init__(self, config, parent=None, reminder_engine=None,
+                 profile_manager=None, on_switch_profile=None,
+                 current_profile_id=None, initial_tab="timer"):
         super().__init__(parent)
         self.config = config
         self._reminder_engine = reminder_engine
+        self._profile_manager = profile_manager
+        self._on_switch_profile = on_switch_profile
+        self._current_profile_id = current_profile_id
+        self._initial_tab = initial_tab
+        self._tab_indexes = {}
         self._setup_ui()
         self._load_values()
 
     def _setup_ui(self):
         self.setWindowTitle("POMATO · 设置")
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowStaysOnTopHint)
-        self.resize(480, 440)
+        self.resize(620, 440)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -46,8 +54,8 @@ class SettingsWindow(QDialog):
         title.setStyleSheet("font-size:16px; font-weight:bold; color:#333;")
         layout.addWidget(title)
 
-        tabs = QTabWidget()
-        tabs.setStyleSheet(
+        self.tabs = QTabWidget()
+        self.tabs.setStyleSheet(
             "QTabWidget::pane { border: 1px solid #ddd; border-radius: 6px;"
             " background: white; }"
             "QTabBar::tab { padding: 8px 18px; border: 1px solid #ddd;"
@@ -95,7 +103,7 @@ class SettingsWindow(QDialog):
 
         t1.addWidget(timer_group)
         t1.addStretch()
-        tabs.addTab(timer_page, "  ⏱  计时  ")
+        self._tab_indexes["timer"] = self.tabs.addTab(timer_page, "  ⏱  计时  ")
 
         # ── Tab 2: AI 日报 ──────────────────────────────────────────
         ai_page = QWidget()
@@ -138,7 +146,7 @@ class SettingsWindow(QDialog):
 
         a1.addWidget(ai_group)
         a1.addStretch()
-        tabs.addTab(ai_page, "  🤖  AI 日报  ")
+        self._tab_indexes["ai"] = self.tabs.addTab(ai_page, "  🤖  AI 日报  ")
 
         # ── Tab 3: 提醒与标签 ───────────────────────────────────────
         rt_page = QWidget()
@@ -232,7 +240,7 @@ class SettingsWindow(QDialog):
         tl.addLayout(tag_input_row)
         r1.addWidget(tags_group)
         r1.addStretch()
-        tabs.addTab(rt_page, "  🔔  提醒与标签  ")
+        self._tab_indexes["reminder"] = self.tabs.addTab(rt_page, "  🔔  提醒与标签  ")
 
         # ── Tab 4: 其他 ─────────────────────────────────────────────
         misc_page = QWidget()
@@ -268,9 +276,76 @@ class SettingsWindow(QDialog):
 
         m1.addWidget(misc_group)
         m1.addStretch()
-        tabs.addTab(misc_page, "  ⚙  其他  ")
+        self._tab_indexes["misc"] = self.tabs.addTab(misc_page, "  ⚙  其他  ")
 
-        layout.addWidget(tabs, 1)
+        if self._profile_manager:
+            profile_page = QWidget()
+            p1 = QVBoxLayout(profile_page)
+            p1.setContentsMargins(16, 16, 16, 16)
+
+            profile_group = QGroupBox("资料空间管理")
+            pl = QVBoxLayout(profile_group)
+
+            self.current_profile_label = QLabel("当前资料空间：-")
+            self.current_profile_label.setStyleSheet("font-weight:bold; color:#333;")
+            pl.addWidget(self.current_profile_label)
+
+            self.current_profile_path_label = QLabel("路径：-")
+            self.current_profile_path_label.setStyleSheet("color:#666;")
+            self.current_profile_path_label.setWordWrap(True)
+            pl.addWidget(self.current_profile_path_label)
+
+            hint_label = QLabel("切换资料空间后，应用会自动重启并进入新的独立数据目录。")
+            hint_label.setStyleSheet("color:#666;")
+            hint_label.setWordWrap(True)
+            pl.addWidget(hint_label)
+
+            self.profile_list = QListWidget()
+            self.profile_list.setStyleSheet(
+                "QListWidget{border:1px solid #ddd;border-radius:4px;}"
+                "QListWidget::item{padding:6px;}"
+                "QListWidget::item:selected{background:#ffebee;color:#d32f2f;}"
+            )
+            pl.addWidget(self.profile_list)
+
+            profile_btn_row = QHBoxLayout()
+            create_profile_btn = QPushButton("新建")
+            create_profile_btn.setStyleSheet(
+                "QPushButton{background:#ef5350;color:white;border:none;"
+                "border-radius:4px;padding:5px 14px;}"
+                "QPushButton:hover{background:#e53935;}"
+            )
+            create_profile_btn.clicked.connect(self._create_profile)
+
+            rename_profile_btn = QPushButton("重命名")
+            rename_profile_btn.setStyleSheet(
+                "QPushButton{border:1px solid #ddd;border-radius:4px;padding:5px 10px;}"
+                "QPushButton:hover{background:#f5f5f5;}"
+            )
+            rename_profile_btn.clicked.connect(self._rename_profile)
+
+            switch_profile_btn = QPushButton("切换并重启")
+            switch_profile_btn.setStyleSheet(
+                "QPushButton{border:1px solid #ddd;border-radius:4px;padding:5px 10px;}"
+                "QPushButton:hover{background:#f5f5f5;}"
+            )
+            switch_profile_btn.clicked.connect(self._switch_profile)
+
+            profile_btn_row.addWidget(create_profile_btn)
+            profile_btn_row.addWidget(rename_profile_btn)
+            profile_btn_row.addWidget(switch_profile_btn)
+            profile_btn_row.addStretch()
+            pl.addLayout(profile_btn_row)
+
+            p1.addWidget(profile_group)
+            p1.addStretch()
+            self._tab_indexes["profile"] = self.tabs.addTab(profile_page, "  🗂  资料空间  ")
+        else:
+            self.profile_list = None
+            self.current_profile_label = None
+            self.current_profile_path_label = None
+
+        layout.addWidget(self.tabs, 1)
 
         # ── Buttons ────────────────────────────────────────────────────
         bl = QHBoxLayout()
@@ -294,6 +369,9 @@ class SettingsWindow(QDialog):
         bl.addWidget(cancel_btn)
         bl.addWidget(save_btn)
         layout.addLayout(bl)
+
+        if self._initial_tab in self._tab_indexes:
+            self.tabs.setCurrentIndex(self._tab_indexes[self._initial_tab])
 
     def _load_values(self):
         start = self.config.get("work_start_time", "08:30")
@@ -324,6 +402,7 @@ class SettingsWindow(QDialog):
 
         # TASK-19: 刷新提醒列表
         self._refresh_reminder_list()
+        self._refresh_profile_list()
 
         self.tag_list.clear()
         for tag in self.config.get("custom_tags", []):
@@ -383,6 +462,119 @@ class SettingsWindow(QDialog):
         self.api_key.setText("")
         if not self.api_model.text().strip() or self.api_model.text().strip() == "gpt-4o-mini":
             self.api_model.setText("qwen2.5:7b")
+
+    def _refresh_profile_list(self):
+        if not self._profile_manager or self.profile_list is None:
+            return
+
+        profiles = self._profile_manager.list_profiles()
+        current_profile_id = self._current_profile_id or self._profile_manager.get_active_profile_id()
+        self.profile_list.clear()
+
+        for profile in profiles:
+            suffix = "（当前）" if profile.get("id") == current_profile_id else ""
+            item = QListWidgetItem(f"{profile.get('name', '-') }  {suffix}".strip())
+            item.setData(Qt.ItemDataRole.UserRole, profile)
+            self.profile_list.addItem(item)
+            if profile.get("id") == current_profile_id:
+                self.profile_list.setCurrentItem(item)
+
+        active_profile = next(
+            (profile for profile in profiles if profile.get("id") == current_profile_id),
+            None,
+        )
+        if active_profile and self.current_profile_label and self.current_profile_path_label:
+            self.current_profile_label.setText(
+                f"当前资料空间：{active_profile.get('name', '-') } ({current_profile_id})"
+            )
+            paths = self._profile_manager.get_profile_paths(current_profile_id)
+            self.current_profile_path_label.setText(f"路径：{paths.profile_dir}")
+
+    def _selected_profile(self):
+        if self.profile_list is None:
+            return None
+        item = self.profile_list.currentItem()
+        if item is None:
+            return None
+        return item.data(Qt.ItemDataRole.UserRole)
+
+    def _create_profile(self):
+        if not self._profile_manager:
+            return
+        name, accepted = QInputDialog.getText(self, "新建资料空间", "请输入资料空间名称：")
+        if not accepted:
+            return
+        try:
+            profile = self._profile_manager.create_profile(
+                name,
+                source_profile_id=self._current_profile_id,
+            )
+        except ValueError as exc:
+            QMessageBox.warning(self, "创建失败", str(exc))
+            return
+
+        self._refresh_profile_list()
+        QMessageBox.information(
+            self,
+            "创建成功",
+            f"已创建资料空间：{profile.get('name', '-') }",
+        )
+
+    def _rename_profile(self):
+        if not self._profile_manager:
+            return
+        profile = self._selected_profile()
+        if profile is None:
+            QMessageBox.information(self, "请选择资料空间", "请先选择一个资料空间。")
+            return
+
+        name, accepted = QInputDialog.getText(
+            self,
+            "重命名资料空间",
+            "请输入新的资料空间名称：",
+            text=profile.get("name", ""),
+        )
+        if not accepted:
+            return
+        try:
+            self._profile_manager.rename_profile(profile.get("id"), name)
+        except ValueError as exc:
+            QMessageBox.warning(self, "重命名失败", str(exc))
+            return
+
+        self._refresh_profile_list()
+        QMessageBox.information(self, "重命名成功", "资料空间名称已更新。")
+
+    def _switch_profile(self):
+        if not self._profile_manager:
+            return
+        profile = self._selected_profile()
+        if profile is None:
+            QMessageBox.information(self, "请选择资料空间", "请先选择一个资料空间。")
+            return
+
+        target_profile_id = profile.get("id")
+        current_profile_id = self._current_profile_id or self._profile_manager.get_active_profile_id()
+        if target_profile_id == current_profile_id:
+            QMessageBox.information(self, "无需切换", "当前已在这个资料空间中。")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "切换资料空间",
+            "切换资料空间后应用将自动重启，是否继续？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        if self._on_switch_profile is None:
+            QMessageBox.warning(self, "切换失败", "当前环境未配置资料空间切换能力。")
+            return
+
+        if self._on_switch_profile(target_profile_id):
+            self.accept()
+        else:
+            QMessageBox.warning(self, "切换失败", "自动重启失败，请稍后重试。")
 
     # ------------------------------------------------------------------
     # TASK-19: 提醒管理 CRUD

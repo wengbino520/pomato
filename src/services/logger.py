@@ -48,7 +48,7 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(log_entry, ensure_ascii=False)
 
 
-def setup_logging(log_dir: str | Path = "", *, console: bool = False) -> None:
+def setup_logging(log_dir: str | Path = "", *, console: bool = False, force: bool = False) -> None:
     """初始化根日志配置（应在 main.py 入口尽早调用）。
 
     Args:
@@ -57,7 +57,7 @@ def setup_logging(log_dir: str | Path = "", *, console: bool = False) -> None:
     """
     global _LOG_INITIALIZED, _LOG_DIR
 
-    if _LOG_INITIALIZED:
+    if _LOG_INITIALIZED and not force:
         return
 
     if not log_dir:
@@ -69,6 +69,11 @@ def setup_logging(log_dir: str | Path = "", *, console: bool = False) -> None:
 
     root = logging.getLogger()
     root.setLevel(logging.DEBUG)
+    for handler in root.handlers:
+        try:
+            handler.close()
+        except Exception:
+            pass
     root.handlers.clear()
 
     # 文件 handler —— DEBUG 级别，JSON 格式，按天旋转，保留 90 天 (ID-01)
@@ -110,8 +115,6 @@ def get_log_dir() -> str:
 def get_logger(name: str) -> logging.Logger:
     """获取指定模块的 logger（自动继承根日志配置）。
 
-    如果 setup_logging 未调用，自动以默认配置初始化。
+    日志实例可在 setup_logging 调用前安全获取；真正的 handler 由入口统一配置。
     """
-    if not _LOG_INITIALIZED:
-        setup_logging()
     return logging.getLogger(name)
