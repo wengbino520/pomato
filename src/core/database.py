@@ -26,6 +26,18 @@ class Database:
         conn.execute("PRAGMA journal_mode=WAL")
         return conn
 
+    @staticmethod
+    def _require_iso_date(date_str: str, field_name: str = "date") -> str:
+        if not isinstance(date_str, str):
+            raise ValueError(f"{field_name} must be an ISO date string")
+        try:
+            parsed = date.fromisoformat(date_str)
+        except ValueError as exc:
+            raise ValueError(f"{field_name} must use YYYY-MM-DD format") from exc
+        if parsed.isoformat() != date_str:
+            raise ValueError(f"{field_name} must use YYYY-MM-DD format")
+        return date_str
+
     def _backup_db(self):
         """每日首次启动时自动备份数据库 (ID-04)。
 
@@ -94,6 +106,24 @@ class Database:
 
                 CREATE INDEX IF NOT EXISTS idx_entries_date
                     ON pomodoro_entries(date);
+
+                CREATE TABLE IF NOT EXISTS diary_entries (
+                    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                    entry_date   TEXT NOT NULL UNIQUE,
+                    content      TEXT NOT NULL DEFAULT '',
+                    mood_score   INTEGER,
+                    mood_emoji   TEXT,
+                    energy_score INTEGER,
+                    stress_score INTEGER,
+                    tags         TEXT NOT NULL DEFAULT '[]',
+                    word_count   INTEGER NOT NULL DEFAULT 0,
+                    ai_summary   TEXT,
+                    created_at   TEXT NOT NULL,
+                    updated_at   TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_diary_entries_date
+                    ON diary_entries(entry_date);
 
                 CREATE TABLE IF NOT EXISTS todos (
                     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -355,6 +385,85 @@ class Database:
                 "SELECT DISTINCT date FROM pomodoro_entries ORDER BY date DESC"
             ).fetchall()
         return [row["date"] for row in rows]
+
+    def get_diary_entry(self, date_str: str):
+        date_str = self._require_iso_date(date_str, "entry_date")
+        with self._get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM diary_entries WHERE entry_date=?",
+                (date_str,),
+            ).fetchone()
+        if not row:
+            return None
+        result = dict(row)
+        result["tags"] = json.loads(result["tags"])
+        return result
+
+    def upsert_diary_entry(
+        self,
+        date_str: str,
+        content: str = "",
+        mood_score: int | None = None,
+        mood_emoji: str | None = None,
+        energy_score: int | None = None,
+        stress_score: int | None = None,
+        tags: list[str] | None = None,
+        ai_summary: str | None = None,
+    ):
+        date_str = self._require_iso_date(date_str, "entry_date")
+        normalized_content = (content or "").strip()
+        tags_json = json.dumps(tags or [], ensure_ascii=False)
+        now = datetime.now().isoformat()
+        word_count = len(normalized_content.split()) if normalized_content else 0
+
+        with self._get_conn() as conn:
+            conn.execute(
+                """INSERT INTO diary_entries
+                       (entry_date, content, mood_score, mood_emoji, energy_score,
+                        stress_score, tags, word_count, ai_summary, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(entry_date) DO UPDATE SET
+                       content=excluded.content,
+                       mood_score=excluded.mood_score,
+                       mood_emoji=excluded.mood_emoji,
+                       energy_score=excluded.energy_score,
+                       stress_score=excluded.stress_score,
+                       tags=excluded.tags,
+                       word_count=excluded.word_count,
+                       ai_summary=excluded.ai_summary,
+                       updated_at=excluded.updated_at""",
+                (
+                    date_str,
+                    normalized_content,
+                    mood_score,
+                    mood_emoji,
+                    energy_score,
+                    stress_score,
+                    tags_json,
+                    word_count,
+                    ai_summary,
+                    now,
+                    now,
+                ),
+            )
+        return self.get_diary_entry(date_str)
+
+    def get_diary_entries_by_date_range(self, start_date: str, end_date: str):
+        start_date = self._require_iso_date(start_date, "start_date")
+        end_date = self._require_iso_date(end_date, "end_date")
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                """SELECT * FROM diary_entries
+                   WHERE entry_date BETWEEN ? AND ?
+                   ORDER BY entry_date ASC""",
+                (start_date, end_date),
+            ).fetchall()
+        result = []
+        for row in rows:
+            item = dict(row)
+            item["tags"] = json.loads(item["tags"])
+            result.append(item)
+        return result
 
     def get_today_session_count(self, date_str):
         with self._get_conn() as conn:

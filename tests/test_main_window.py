@@ -66,6 +66,23 @@ def test_main_window_filters_entries_by_selected_date(qapp, tmp_db):
     assert window.date_label.text().startswith(yesterday.isoformat())
 
 
+def test_main_window_refreshes_diary_widget_by_selected_date(qapp, tmp_db):
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+
+    tmp_db.upsert_diary_entry(today.isoformat(), content="今天的日记")
+    tmp_db.upsert_diary_entry(yesterday.isoformat(), content="昨天的日记")
+
+    window = MainWindow(_DummyConfig(), tmp_db, _DummyTimer())
+
+    assert window._diary_widget._content_edit.toPlainText() == "今天的日记"
+
+    window.view_date_edit.setDate(QDate.fromString(yesterday.isoformat(), "yyyy-MM-dd"))
+    qapp.processEvents()
+
+    assert window._diary_widget._content_edit.toPlainText() == "昨天的日记"
+
+
 # ── EntryItem expand/collapse toggle tests ────────────────────────────────────
 
 def _make_entry(content="测试内容", skipped=False, tags=None):

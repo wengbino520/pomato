@@ -307,6 +307,146 @@ class TestDatabaseExceptionScenarios:
         assert entries[0]["content"] == "数据"
 
 
+class TestDiarySchema:
+    """TASK-01: diary_entries 表初始化与结构约束。"""
+
+    def test_diary_table_created_with_expected_columns(self, tmp_db):
+        with tmp_db._get_conn() as conn:
+            tables = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='diary_entries'"
+            ).fetchall()
+            columns = conn.execute("PRAGMA table_info(diary_entries)").fetchall()
+            indexes = conn.execute("PRAGMA index_list(diary_entries)").fetchall()
+            unique_index_names = [row[1] for row in indexes if row[2] == 1]
+
+        assert len(tables) == 1
+
+        column_names = [row[1] for row in columns]
+        assert column_names == [
+            "id",
+            "entry_date",
+            "content",
+            "mood_score",
+            "mood_emoji",
+            "energy_score",
+            "stress_score",
+            "tags",
+            "word_count",
+            "ai_summary",
+            "created_at",
+            "updated_at",
+        ]
+
+        index_names = [row[1] for row in indexes]
+        assert "idx_diary_entries_date" in index_names
+        assert any(name.startswith("sqlite_autoindex_diary_entries") for name in unique_index_names)
+
+    def test_diary_table_survives_reinitialization(self, tmp_path):
+        from unittest.mock import patch
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            from src.core.database import Database
+
+            db = Database()
+            with db._get_conn() as conn:
+                conn.execute(
+                    "INSERT INTO diary_entries "
+                    "(entry_date, content, tags, word_count, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        "2026-07-03",
+                        "首篇日记",
+                        "[]",
+                        4,
+                        "2026-07-03T09:00:00",
+                        "2026-07-03T09:00:00",
+                    ),
+                )
+
+            db2 = Database()
+
+        with db2._get_conn() as conn:
+            row = conn.execute(
+                "SELECT entry_date, content FROM diary_entries WHERE entry_date=?",
+                ("2026-07-03",),
+            ).fetchone()
+
+        assert row["entry_date"] == "2026-07-03"
+        assert row["content"] == "首篇日记"
+
+
+class TestDiaryEntries:
+    """TASK-02: 日记 CRUD 与 ISO 日期约束。"""
+
+    def test_upsert_diary_entry_creates_new_record(self, tmp_db):
+        entry = tmp_db.upsert_diary_entry(
+            "2026-07-03",
+            content="完成设计文档",
+            mood_score=4,
+            mood_emoji="😊",
+            energy_score=3,
+            stress_score=2,
+            tags=["设计", "复盘"],
+        )
+        assert entry["entry_date"] == "2026-07-03"
+        assert entry["content"] == "完成设计文档"
+        assert entry["mood_score"] == 4
+        assert entry["tags"] == ["设计", "复盘"]
+
+    def test_upsert_diary_entry_updates_same_date(self, tmp_db):
+        tmp_db.upsert_diary_entry("2026-07-03", content="初稿", mood_score=2)
+        updated = tmp_db.upsert_diary_entry(
+            "2026-07-03",
+            content="终稿",
+            mood_score=5,
+            tags=["完成"],
+        )
+        entries = tmp_db.get_diary_entries_by_date_range("2026-07-03", "2026-07-03")
+        assert len(entries) == 1
+        assert updated["content"] == "终稿"
+        assert updated["mood_score"] == 5
+        assert updated["tags"] == ["完成"]
+
+    def test_upsert_diary_entry_allows_state_only_save(self, tmp_db):
+        entry = tmp_db.upsert_diary_entry(
+            "2026-07-03",
+            mood_score=3,
+            mood_emoji="😐",
+            energy_score=2,
+            stress_score=4,
+        )
+        assert entry["content"] == ""
+        assert entry["mood_emoji"] == "😐"
+        assert entry["energy_score"] == 2
+        assert entry["stress_score"] == 4
+
+    def test_get_diary_entry_returns_none_for_missing_date(self, tmp_db):
+        assert tmp_db.get_diary_entry("2026-07-03") is None
+
+    def test_get_diary_entries_by_date_range_returns_ordered_entries(self, tmp_db):
+        tmp_db.upsert_diary_entry("2026-07-02", content="前一天")
+        tmp_db.upsert_diary_entry("2026-07-03", content="当天")
+        tmp_db.upsert_diary_entry("2026-07-04", content="后一天")
+        entries = tmp_db.get_diary_entries_by_date_range("2026-07-02", "2026-07-04")
+        assert [entry["entry_date"] for entry in entries] == [
+            "2026-07-02",
+            "2026-07-03",
+            "2026-07-04",
+        ]
+
+    @pytest.mark.parametrize(
+        "date_str",
+        ["2026/07/03", "07-03-2026", "2026-7-3", "not-a-date"],
+    )
+    def test_diary_methods_reject_non_iso_date(self, tmp_db, date_str):
+        with pytest.raises(ValueError, match="YYYY-MM-DD"):
+            tmp_db.upsert_diary_entry(date_str, content="无效")
+        with pytest.raises(ValueError, match="YYYY-MM-DD"):
+            tmp_db.get_diary_entry(date_str)
+        with pytest.raises(ValueError, match="YYYY-MM-DD"):
+            tmp_db.get_diary_entries_by_date_range("2026-07-01", date_str)
+
+
 # ── Reminder with remind_date ──────────────────────────────────────────────────
 
 class TestReminderWithDate:

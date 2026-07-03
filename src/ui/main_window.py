@@ -29,6 +29,7 @@ from src.ui.history_window import HistoryWindow
 from src.ui.todo_list_widget import TodoListWidget
 from src.ui.reminder_list_widget import ReminderListWidget
 from src.ui.stats_widget import StatsWidget
+from src.ui.diary_widget import DiaryWidget
 from src.ui.tag_selector_widget import TagSelectorWidget
 
 logger = get_logger(__name__)
@@ -540,6 +541,9 @@ class MainWindow(QMainWindow):
         self._stats_widget = StatsWidget(self.db)
         self.tab_widget.addTab(self._stats_widget, "📊 统计")
 
+        self._diary_widget = DiaryWidget(self.db, self.config)
+        self.tab_widget.addTab(self._diary_widget, "📓 日记")
+
         return self.tab_widget
 
     def _build_bottom_bar(self) -> QWidget:
@@ -646,6 +650,9 @@ class MainWindow(QMainWindow):
 
         # 刷新统计 Tab (C3)
         self._stats_widget.refresh(date_str)
+
+        if hasattr(self, '_diary_widget'):
+            self._diary_widget.refresh(date_str)
 
     # ------------------------------------------------------------------
     # Slots
