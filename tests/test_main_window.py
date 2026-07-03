@@ -83,6 +83,40 @@ def test_main_window_refreshes_diary_widget_by_selected_date(qapp, tmp_db):
     assert window._diary_widget._content_edit.toPlainText() == "昨天的日记"
 
 
+def test_main_window_switches_context_buttons_by_tab(qapp, tmp_db):
+    window = MainWindow(_DummyConfig(), tmp_db, _DummyTimer())
+
+    assert not window.start_btn.isHidden()
+    assert not window.add_btn.isHidden()
+    assert not window.pause_btn.isHidden()
+    assert window.diary_history_btn.isHidden()
+    assert not window.history_btn.isHidden()
+    assert not window.report_btn.isHidden()
+    assert not window.weekly_btn.isHidden()
+    assert not window.monthly_btn.isHidden()
+
+    window.tab_widget.setCurrentIndex(4)
+    qapp.processEvents()
+
+    assert window.start_btn.isHidden()
+    assert window.add_btn.isHidden()
+    assert window.pause_btn.isHidden()
+    assert not window.diary_history_btn.isHidden()
+    assert window.history_btn.isHidden()
+    assert window.report_btn.isHidden()
+    assert window.weekly_btn.isHidden()
+    assert window.monthly_btn.isHidden()
+
+
+def test_main_window_open_diary_date_switches_tab_and_date(qapp, tmp_db):
+    window = MainWindow(_DummyConfig(), tmp_db, _DummyTimer())
+    window._open_diary_date("2026-07-03")
+    qapp.processEvents()
+
+    assert window.tab_widget.currentIndex() == 4
+    assert window.view_date_edit.date().toString("yyyy-MM-dd") == "2026-07-03"
+
+
 # ── EntryItem expand/collapse toggle tests ────────────────────────────────────
 
 def _make_entry(content="测试内容", skipped=False, tags=None):

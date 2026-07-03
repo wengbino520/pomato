@@ -446,6 +446,14 @@ class TestDiaryEntries:
         with pytest.raises(ValueError, match="YYYY-MM-DD"):
             tmp_db.get_diary_entries_by_date_range("2026-07-01", date_str)
 
+    def test_get_diary_list_items_returns_descending_summary(self, tmp_db):
+        tmp_db.upsert_diary_entry("2026-07-02", content="前一天", mood_emoji="😐", mood_score=2)
+        tmp_db.upsert_diary_entry("2026-07-03", content="", mood_emoji="😊", mood_score=4)
+        items = tmp_db.get_diary_list_items()
+        assert [item["entry_date"] for item in items] == ["2026-07-03", "2026-07-02"]
+        assert items[0]["has_content"] is False
+        assert items[1]["has_content"] is True
+
 
 # ── Reminder with remind_date ──────────────────────────────────────────────────
 

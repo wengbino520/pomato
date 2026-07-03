@@ -126,8 +126,8 @@ class DiaryWidget(QWidget):
         hint_title.setStyleSheet(f"font-size:13px; font-weight:bold; color:{COLORS['grey_dark']};")
         self._hint_label = QLabel("")
         self._hint_label.setWordWrap(True)
-        self._hint_label.setStyleSheet(f"font-size:12px; color:{COLORS['grey_medium']};")
-        self._hint_label.setMinimumHeight(40)
+        self._hint_label.setStyleSheet(f"font-size:13px; color:{COLORS['grey_medium']};")
+        self._hint_label.setMinimumHeight(68)
         self._hint_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         hint_layout.addWidget(hint_title)
         hint_layout.addWidget(self._hint_label)
@@ -186,7 +186,7 @@ class DiaryWidget(QWidget):
         self._loading = True
         self._date_label.setText(f"📓 日记  {date_str}")
         self._summary_label.setText(self._build_summary_text(context))
-        self._hint_label.setText("\n".join(f"- {hint}" for hint in hints))
+        self._hint_label.setText(self._build_hint_text(hints))
         self._content_edit.setPlainText(context["content"])
         self._set_state_value(self._mood_combo, self._find_mood_data(context))
         self._set_state_value(self._energy_combo, context["energy_score"])
@@ -240,6 +240,13 @@ class DiaryWidget(QWidget):
             f"⏱ {context['focus_minutes']} 分钟  ·  "
             f"✅ 待办 {context['todo_done']}/{context['todo_total']}"
         )
+
+    @staticmethod
+    def _build_hint_text(hints: list[str]) -> str:
+        items = "".join(
+            f"<div style='margin:0 0 8px 0;'>• {hint}</div>" for hint in hints
+        )
+        return f"<div style='line-height:1.5;'>{items}</div>"
 
     def _build_status_text(self, context: dict) -> str:
         if not context["diary_exists"]:

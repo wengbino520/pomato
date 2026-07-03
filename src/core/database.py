@@ -465,6 +465,22 @@ class Database:
             result.append(item)
         return result
 
+    def get_diary_list_items(self):
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                """SELECT entry_date, content, mood_score, mood_emoji,
+                          word_count, updated_at
+                   FROM diary_entries
+                   ORDER BY entry_date DESC"""
+            ).fetchall()
+
+        result = []
+        for row in rows:
+            item = dict(row)
+            item["has_content"] = bool((item.get("content") or "").strip())
+            result.append(item)
+        return result
+
     def get_today_session_count(self, date_str):
         with self._get_conn() as conn:
             row = conn.execute(

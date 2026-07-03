@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
 )
 
 from src.services.logger import get_logger
+from src.ui.diary_history_window import DiaryHistoryWindow
 from src.ui.styles import COLORS, STYLES, btn_style
 from src.ui.history_window import HistoryWindow
 from src.ui.todo_list_widget import TodoListWidget
@@ -543,6 +544,7 @@ class MainWindow(QMainWindow):
 
         self._diary_widget = DiaryWidget(self.db, self.config)
         self.tab_widget.addTab(self._diary_widget, "📓 日记")
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
 
         return self.tab_widget
 
@@ -554,48 +556,61 @@ class MainWindow(QMainWindow):
         bl = QHBoxLayout(bottom)
         bl.setContentsMargins(16, 8, 16, 8)
 
-        start_btn = QPushButton("▶  手动开始")
-        start_btn.setStyleSheet(STYLES["btn_grey"])
-        start_btn.clicked.connect(self.timer.manual_start)
+        self._context_actions = QWidget()
+        context_layout = QHBoxLayout(self._context_actions)
+        context_layout.setContentsMargins(0, 0, 0, 0)
+        context_layout.setSpacing(6)
 
-        add_btn = QPushButton("＋  手动补录")
-        add_btn.setStyleSheet(STYLES["btn_brown"])
-        add_btn.clicked.connect(self._on_add_entry)
+        self.start_btn = QPushButton("▶  手动开始")
+        self.start_btn.setStyleSheet(STYLES["btn_grey"])
+        self.start_btn.clicked.connect(self.timer.manual_start)
+
+        self.add_btn = QPushButton("＋  手动补录")
+        self.add_btn.setStyleSheet(STYLES["btn_brown"])
+        self.add_btn.clicked.connect(self._on_add_entry)
 
         self.pause_btn = QPushButton("⏸  暂停")
         self.pause_btn.setStyleSheet(STYLES["btn_blue"])
         self.pause_btn.clicked.connect(self._on_pause_resume)
         self.pause_btn.setEnabled(False)
 
+        self.diary_history_btn = QPushButton("📓  日记历史")
+        self.diary_history_btn.setStyleSheet(STYLES["btn_primary"])
+        self.diary_history_btn.clicked.connect(self._open_diary_history_window)
+
+        context_layout.addWidget(self.start_btn)
+        context_layout.addWidget(self.add_btn)
+        context_layout.addWidget(self.pause_btn)
+        context_layout.addWidget(self.diary_history_btn)
+
         self.history_btn = QPushButton("📚  历史报告")
         self.history_btn.setStyleSheet(STYLES["btn_history"])
         self.history_btn.clicked.connect(self._open_history_window)
 
-        report_btn = QPushButton("📋  日报")
-        report_btn.setStyleSheet(STYLES["btn_primary"])
-        report_btn.clicked.connect(self._on_generate_report)
+        self.report_btn = QPushButton("📋  日报")
+        self.report_btn.setStyleSheet(STYLES["btn_primary"])
+        self.report_btn.clicked.connect(self._on_generate_report)
 
-        weekly_btn = QPushButton("📋  周报")
-        weekly_btn.setStyleSheet(STYLES["btn_primary"])
-        weekly_btn.clicked.connect(self._on_generate_weekly_report)
+        self.weekly_btn = QPushButton("📋  周报")
+        self.weekly_btn.setStyleSheet(STYLES["btn_primary"])
+        self.weekly_btn.clicked.connect(self._on_generate_weekly_report)
 
-        monthly_btn = QPushButton("📋  月报")
-        monthly_btn.setStyleSheet(STYLES["btn_primary"])
-        monthly_btn.clicked.connect(self._on_generate_monthly_report)
+        self.monthly_btn = QPushButton("📋  月报")
+        self.monthly_btn.setStyleSheet(STYLES["btn_primary"])
+        self.monthly_btn.clicked.connect(self._on_generate_monthly_report)
 
         settings_btn = QPushButton("⚙  设置")
         settings_btn.setStyleSheet(STYLES["btn_primary"])
         settings_btn.clicked.connect(self._on_open_settings)
 
-        bl.addWidget(start_btn)
-        bl.addWidget(add_btn)
-        bl.addWidget(self.pause_btn)
+        bl.addWidget(self._context_actions)
         bl.addStretch()
         bl.addWidget(self.history_btn)
-        bl.addWidget(report_btn)
-        bl.addWidget(weekly_btn)
-        bl.addWidget(monthly_btn)
+        bl.addWidget(self.report_btn)
+        bl.addWidget(self.weekly_btn)
+        bl.addWidget(self.monthly_btn)
         bl.addWidget(settings_btn)
+        self._refresh_bottom_actions_for_tab(0)
         return bottom
 
     @staticmethod
@@ -654,6 +669,21 @@ class MainWindow(QMainWindow):
         if hasattr(self, '_diary_widget'):
             self._diary_widget.refresh(date_str)
 
+    def _refresh_bottom_actions_for_tab(self, index: int):
+        is_pomodoro = index == 0
+        is_diary = index == 4
+        self.start_btn.setVisible(is_pomodoro)
+        self.add_btn.setVisible(is_pomodoro)
+        self.pause_btn.setVisible(is_pomodoro)
+        self.diary_history_btn.setVisible(is_diary)
+        self.history_btn.setVisible(is_pomodoro)
+        self.report_btn.setVisible(is_pomodoro)
+        self.weekly_btn.setVisible(is_pomodoro)
+        self.monthly_btn.setVisible(is_pomodoro)
+
+    def _on_tab_changed(self, index: int):
+        self._refresh_bottom_actions_for_tab(index)
+
     # ------------------------------------------------------------------
     # Slots
     # ------------------------------------------------------------------
@@ -687,6 +717,19 @@ class MainWindow(QMainWindow):
             config=self.config,
             initial_date=self.view_date.isoformat(),
         ).exec()
+
+    def _open_diary_history_window(self):
+        DiaryHistoryWindow(
+            self.db,
+            self.config,
+            self,
+            initial_date=self.view_date.isoformat(),
+            on_open_date=self._open_diary_date,
+        ).exec()
+
+    def _open_diary_date(self, date_str: str):
+        self.view_date_edit.setDate(QDate.fromString(date_str, "yyyy-MM-dd"))
+        self.tab_widget.setCurrentIndex(4)
 
     def _on_generate_report(self):
         if self.on_generate_report:
