@@ -68,6 +68,35 @@ chmod +x run.sh && ./run.sh
 
 > ⚠️ 如安装了 Anaconda，`run.bat` 会自动隔离 Anaconda 的 DLL 冲突，无需额外处理。
 
+### 启动方式与资料空间策略
+
+支持以下几种启动方式：
+
+```bash
+# 默认启动：进入当前激活的资料空间
+.venv\Scripts\python main.py
+
+# 显式指定某个已注册的资料空间
+.venv\Scripts\python main.py --profile main
+.venv\Scripts\python main.py --profile profile-12345678
+
+# 显式指定独立数据目录（开发/调试/自动化测试优先）
+.venv\Scripts\python main.py --data-dir D:\temp\pomato-sandbox
+```
+
+资料空间选择优先级如下：
+
+1. `--data-dir <path>`：最高优先级，直接使用指定目录，不依赖资料空间注册表
+2. `--profile <id>`：次高优先级，使用指定的已注册资料空间
+3. `profile_state.json` 中保存的 `active_profile_id`：普通启动时使用当前激活资料空间
+4. 默认值：如果没有有效状态，则回退到默认资料空间 `main`（显示名为“主资料空间”）
+
+补充说明：
+
+- 首次启动或状态文件无效时，应用会回退到默认资料空间 `main`
+- 从设置页或托盘切换资料空间后，应用会自动重启，之后的普通启动将进入新的激活资料空间
+- `--profile` 适合手动切换到某个已注册空间；`--data-dir` 更适合开发测试，因为它不会污染真实资料空间注册表
+
 ### 打包为 .exe（可选）
 
 ```bash
