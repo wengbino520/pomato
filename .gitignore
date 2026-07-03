@@ -25,3 +25,4 @@ build/
 photo_proc/
 output/
 .understand-anything/
+.tmp/
