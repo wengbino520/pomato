@@ -1,5 +1,10 @@
+import getpass
+import hashlib
 import json
 import base64
+import os
+import platform
+import stat
 import sys
 from pathlib import Path
 
@@ -70,6 +75,7 @@ class Config:
         try:
             with open(self.config_file, "w", encoding="utf-8") as f:
                 json.dump(payload, f, ensure_ascii=False, indent=2)
+            self._restrict_file_permissions(self.config_file)
         except Exception:
             logger.exception("Failed to save config to %s", self.config_file)
 
@@ -100,7 +106,7 @@ class Config:
                 encrypted = win32crypt.CryptProtectData(value.encode("utf-8"), "POMATO", None, None, None, 0)
                 return "dpapi:" + base64.b64encode(encrypted).decode("ascii")
             except Exception:
-                pass
+                logger.warning("DPAPI encryption failed, falling back to XOR")
 
         token = self._xor_bytes(value.encode("utf-8"))
         return "xor:" + base64.b64encode(token).decode("ascii")
@@ -118,15 +124,36 @@ class Config:
 
             if encoded.startswith("xor:"):
                 raw = base64.b64decode(encoded.split(":", 1)[1].encode("ascii"))
-                return self._xor_bytes(raw).decode("utf-8")
+                try:
+                    return self._xor_bytes(raw).decode("utf-8")
+                except UnicodeDecodeError:
+                    # Might be encrypted with legacy hardcoded key; try migration.
+                    return self._xor_bytes_legacy(raw).decode("utf-8")
 
-            # Compatibility fallback for very old/hand-edited config.
+            # Plaintext fallback: re-encrypt on next save.
+            logger.warning("Unencrypted API key detected in config; will encrypt on next save")
             return encoded
         except Exception:
             return ""
 
     @staticmethod
-    def _xor_bytes(data: bytes) -> bytes:
+    def _derive_machine_key() -> bytes:
+        """Derive a machine-specific key from hostname + username.
+
+        This prevents the encrypted value from being portable across machines,
+        making offline key extraction harder.
+        """
+        identity = f"{platform.node()}:{getpass.getuser()}:pomato".encode("utf-8")
+        return hashlib.sha256(identity).digest()
+
+    @classmethod
+    def _xor_bytes(cls, data: bytes) -> bytes:
+        key = cls._derive_machine_key()
+        return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
+
+    @staticmethod
+    def _xor_bytes_legacy(data: bytes) -> bytes:
+        """Decode values encrypted with the old hardcoded key (migration only)."""
         key = b"pomato-local-config-key"
         return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
 
@@ -162,6 +189,16 @@ class Config:
         except Exception:
             logger.exception("Failed to sync autostart registry key")
 
+    @staticmethod
+    def _restrict_file_permissions(path: Path):
+        """Set file to owner-only read/write on POSIX systems."""
+        if sys.platform == "win32":
+            return
+        try:
+            os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+        except OSError:
+            logger.debug("Could not restrict permissions on %s", path)
+
     def _sync_autostart_linux(self, enabled: bool):
         autostart_dir = Path.home() / ".config" / "autostart"
         desktop_file = autostart_dir / "pomato.desktop"
@@ -183,7 +220,7 @@ class Config:
                 if desktop_file.exists():
                     desktop_file.unlink()
         except Exception:
-            pass
+            logger.debug("Failed to sync Linux autostart", exc_info=True)
 
     def _build_autostart_command(self) -> str:
         if getattr(sys, "frozen", False):

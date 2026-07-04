@@ -519,16 +519,23 @@ class Database:
         content, _ = self.get_latest_valid_entry(date_str)
         return content
 
+    @staticmethod
+    def _escape_like(value: str) -> str:
+        """Escape LIKE special characters so they match literally."""
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
     def search_reports(self, keyword: str):
         kw = (keyword or "").strip()
         if not kw:
             return self.get_all_reports()
 
-        like_pattern = f"%{kw}%"
+        like_pattern = f"%{self._escape_like(kw)}%"
         with self._get_conn() as conn:
             rows = conn.execute(
                 """SELECT * FROM daily_reports
-                   WHERE date LIKE ? OR final_report LIKE ? OR ai_summary LIKE ?
+                   WHERE date LIKE ? ESCAPE '\\'
+                      OR final_report LIKE ? ESCAPE '\\'
+                      OR ai_summary LIKE ? ESCAPE '\\'
                    ORDER BY date DESC""",
                 (like_pattern, like_pattern, like_pattern),
             ).fetchall()
@@ -646,18 +653,22 @@ class Database:
             ).fetchone()
         return dict(row) if row else None
 
+    _TODO_ALLOWED_COLUMNS = frozenset(
+        {"title", "priority", "status", "due_date", "note", "sort_order", "pomodoro_id", "todo_date"}
+    )
+
     def update_todo(self, todo_id, **kwargs):
         if not kwargs:
             return
-        allowed = {"title", "priority", "status", "due_date", "note", "sort_order", "pomodoro_id", "todo_date"}
-        updates = {k: v for k, v in kwargs.items() if k in allowed}
+        updates = {k: v for k, v in kwargs.items() if k in self._TODO_ALLOWED_COLUMNS}
         if not updates:
             return
         updates["updated_at"] = datetime.now().isoformat()
-        set_clause = ", ".join(f"{k}=?" for k in updates)
-        values = list(updates.values()) + [todo_id]
+        columns = list(updates.keys())
+        set_clause = ", ".join(f'"{col}"=?' for col in columns)
+        values = [updates[c] for c in columns] + [todo_id]
         with self._get_conn() as conn:
-            conn.execute(f"UPDATE todos SET {set_clause} WHERE id=?", values)
+            conn.execute(f'UPDATE todos SET {set_clause} WHERE id=?', values)
 
     def delete_todo(self, todo_id):
         with self._get_conn() as conn:
@@ -736,20 +747,24 @@ class Database:
             ).fetchall()
         return [dict(r) for r in rows]
 
+    _REMINDER_ALLOWED_COLUMNS = frozenset(
+        {"title", "remind_time", "remind_date", "repeat_type",
+         "repeat_days", "enabled", "snooze_min", "last_triggered",
+         "snoozed_until"}
+    )
+
     def update_reminder(self, reminder_id, **kwargs):
         if not kwargs:
             return
-        allowed = {"title", "remind_time", "remind_date", "repeat_type",
-                   "repeat_days", "enabled", "snooze_min", "last_triggered",
-                   "snoozed_until"}
-        updates = {k: v for k, v in kwargs.items() if k in allowed}
+        updates = {k: v for k, v in kwargs.items() if k in self._REMINDER_ALLOWED_COLUMNS}
         if not updates:
             return
         updates["updated_at"] = datetime.now().isoformat()
-        set_clause = ", ".join(f"{k}=?" for k in updates)
-        values = list(updates.values()) + [reminder_id]
+        columns = list(updates.keys())
+        set_clause = ", ".join(f'"{col}"=?' for col in columns)
+        values = [updates[c] for c in columns] + [reminder_id]
         with self._get_conn() as conn:
-            conn.execute(f"UPDATE reminders SET {set_clause} WHERE id=?", values)
+            conn.execute(f'UPDATE reminders SET {set_clause} WHERE id=?', values)
 
     def delete_reminder(self, reminder_id):
         with self._get_conn() as conn:
