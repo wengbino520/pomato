@@ -3,7 +3,6 @@ ReminderPopup — 到点提醒强弹窗 (TASK-11)
 
 参考 PopupWindow 的 show_and_focus / _force_foreground 模式。
 """
-import sys
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
@@ -11,6 +10,7 @@ from PyQt6.QtWidgets import (
     QLabel, QPushButton, QFrame,
 )
 
+from src.ui.utils import setup_topmost_dialog, show_and_focus
 from src.services.logger import get_logger
 
 logger = get_logger(__name__)
@@ -40,13 +40,7 @@ class ReminderPopup(QDialog):
 
     def _setup_window(self):
         self.setWindowTitle("⏰ 提醒")
-        # Dialog → Window: 避免 Linux 下输入法框架 (fcitx/ibus) 忽略弹窗
-        self.setWindowFlags(
-            Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Window
-        )
-        self.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled, True)
-        self.setMinimumWidth(380)
-        self.setModal(False)
+        setup_topmost_dialog(self, min_width=380)
         self.setStyleSheet("QDialog { background:#fff; }")
 
     def _setup_ui(self):
@@ -139,20 +133,4 @@ class ReminderPopup(QDialog):
     # ------------------------------------------------------------------
 
     def show_and_focus(self):
-        self._timeout_timer.start(self._timeout_seconds * 1000)
-        self.show()
-        self.raise_()
-        self.activateWindow()
-        self._force_foreground()
-
-    def _force_foreground(self):
-        """Best-effort foreground window (Windows only)."""
-        if sys.platform != "win32":
-            return
-        try:
-            import ctypes
-            hwnd = int(self.winId())
-            ctypes.windll.user32.keybd_event(0, 0, 0, 0)
-            ctypes.windll.user32.SetForegroundWindow(hwnd)
-        except Exception:
-            logger.debug("ctypes foreground window failed", exc_info=True)
+        show_and_focus(self, self._timeout_timer, self._timeout_seconds)

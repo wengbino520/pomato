@@ -12,6 +12,36 @@ logger = get_logger(__name__)
 class Database:
     _MAX_BACKUPS = 7  # 保留最近 7 天的备份
 
+    # ------------------------------------------------------------------
+    # Row deserialization helpers (CD-04)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _deserialize_entry(row) -> dict:
+        """Convert a pomodoro_entries row to dict with parsed tags JSON."""
+        d = dict(row)
+        d["tags"] = json.loads(d["tags"])
+        return d
+
+    @staticmethod
+    def _deserialize_entries(rows) -> list[dict]:
+        """Convert multiple pomodoro_entries rows to list of dicts."""
+        return [Database._deserialize_entry(row) for row in rows]
+
+    @staticmethod
+    def _deserialize_report(row) -> dict:
+        """Convert a daily_reports row to dict with parsed raw_entries JSON."""
+        d = dict(row)
+        d["raw_entries"] = json.loads(d["raw_entries"])
+        return d
+
+    @staticmethod
+    def _deserialize_diary(row) -> dict:
+        """Convert a diary_entries row to dict with parsed tags JSON."""
+        d = dict(row)
+        d["tags"] = json.loads(d["tags"])
+        return d
+
     def __init__(self, data_dir: Path | None = None):
         self.data_dir = Path(data_dir) if data_dir else Path.home() / ".pomato"
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -254,12 +284,7 @@ class Database:
                    ORDER BY e.start_time, e.end_time""",
                 (date_str,),
             ).fetchall()
-        result = []
-        for row in rows:
-            d = dict(row)
-            d["tags"] = json.loads(d["tags"])
-            result.append(d)
-        return result
+        return self._deserialize_entries(rows)
 
     def update_entry(self, entry_id, content, tags, start_time=None, end_time=None, todo_id=None):
         tags_json = json.dumps(tags or [], ensure_ascii=False)
@@ -289,11 +314,7 @@ class Database:
                    WHERE e.id=?""",
                 (entry_id,),
             ).fetchone()
-        if row:
-            d = dict(row)
-            d["tags"] = json.loads(d["tags"])
-            return d
-        return None
+        return self._deserialize_entry(row) if row else None
 
     def get_entries_by_date_range(self, start_date: str, end_date: str):
         """Return all non-skipped entries between two dates (inclusive).
@@ -307,12 +328,7 @@ class Database:
                    ORDER BY date, start_time""",
                 (start_date, end_date),
             ).fetchall()
-        result = []
-        for row in rows:
-            d = dict(row)
-            d["tags"] = json.loads(d["tags"])
-            result.append(d)
-        return result
+        return self._deserialize_entries(rows)
 
     def get_daily_tomato_counts(self, start_date: str, end_date: str):
         """Return (date, completed_count) pairs for date range (C3).
@@ -351,11 +367,7 @@ class Database:
                 "SELECT * FROM daily_reports WHERE date=? AND period=?",
                 (date_str, period),
             ).fetchone()
-        if row:
-            d = dict(row)
-            d["raw_entries"] = json.loads(d["raw_entries"])
-            return d
-        return None
+        return self._deserialize_report(row) if row else None
 
     def get_all_report_dates(self):
         """Return distinct dates that have at least one report (any period)."""
@@ -371,12 +383,7 @@ class Database:
             rows = conn.execute(
                 "SELECT * FROM daily_reports ORDER BY date DESC, period"
             ).fetchall()
-        result = []
-        for row in rows:
-            d = dict(row)
-            d["raw_entries"] = json.loads(d["raw_entries"])
-            result.append(d)
-        return result
+        return [self._deserialize_report(row) for row in rows]
 
     def get_all_entry_dates(self):
         """返回所有有番茄钟记录的日期（用于历史窗口展示无日报但有记录的日期）。"""
@@ -393,11 +400,7 @@ class Database:
                 "SELECT * FROM diary_entries WHERE entry_date=?",
                 (date_str,),
             ).fetchone()
-        if not row:
-            return None
-        result = dict(row)
-        result["tags"] = json.loads(result["tags"])
-        return result
+        return self._deserialize_diary(row) if row else None
 
     def upsert_diary_entry(
         self,
@@ -458,12 +461,7 @@ class Database:
                    ORDER BY entry_date ASC""",
                 (start_date, end_date),
             ).fetchall()
-        result = []
-        for row in rows:
-            item = dict(row)
-            item["tags"] = json.loads(item["tags"])
-            result.append(item)
-        return result
+        return [self._deserialize_diary(row) for row in rows]
 
     def get_diary_list_items(self):
         with self._get_conn() as conn:
@@ -540,13 +538,7 @@ class Database:
                    ORDER BY date DESC""",
                 (like_pattern, like_pattern, like_pattern),
             ).fetchall()
-
-        result = []
-        for row in rows:
-            d = dict(row)
-            d["raw_entries"] = json.loads(d["raw_entries"])
-            result.append(d)
-        return result
+        return [self._deserialize_report(row) for row in rows]
 
     # ------------------------------------------------------------------
     # Todo CRUD methods (TASK-02)

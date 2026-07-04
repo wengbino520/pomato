@@ -1,5 +1,5 @@
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QColor, QTextCursor
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -19,35 +19,11 @@ from PyQt6.QtWidgets import (
 )
 
 from src.services.ai_client import AIClient
+from src.services.ai_worker import AIReportWorker
 from src.services.logger import get_logger
+from src.ui.utils import append_streaming_text
 
 logger = get_logger(__name__)
-
-
-class _HistoryAIWorker(QThread):
-    chunk_received = pyqtSignal(str)
-    finished = pyqtSignal(str)
-    error = pyqtSignal(str)
-
-    def __init__(self, ai_client: AIClient, entries: list[dict], report_date: str,
-                 todos: list[dict] | None = None):
-        super().__init__()
-        self.ai_client = ai_client
-        self.entries = entries
-        self.report_date = report_date
-        self.todos = todos or []
-
-    def run(self):
-        try:
-            result = self.ai_client.generate_report(
-                self.entries,
-                self.report_date,
-                on_chunk=lambda c: self.chunk_received.emit(c),
-                todos=self.todos if self.todos else None,
-            )
-            self.finished.emit(result)
-        except Exception as exc:
-            self.error.emit(str(exc))
 
 
 class HistoryWindow(QDialog):
@@ -59,7 +35,7 @@ class HistoryWindow(QDialog):
         self.ai_client = ai_client
         self.config = config or {}
         self._reports: list[dict] = []           # all reports (dict with date, period, ...)
-        self._worker: _HistoryAIWorker | None = None
+        self._worker: AIReportWorker | None = None
         self._current_date: str = ""
         self._current_period: str = "daily"
         self._initial_date = initial_date
@@ -396,19 +372,15 @@ class HistoryWindow(QDialog):
         self.progress.show()
         self.preview.clear()
 
-        self._worker = _HistoryAIWorker(self.ai_client, valid, self._current_date,
-                                        todos=self.db.get_todos(date_str=self._current_date, include_done=True))
+        self._worker = AIReportWorker(self.ai_client, valid, self._current_date,
+                                       todos=self.db.get_todos(date_str=self._current_date, include_done=True))
         self._worker.chunk_received.connect(self._on_ai_chunk)
         self._worker.finished.connect(self._on_ai_finished)
         self._worker.error.connect(self._on_ai_error)
         self._worker.start()
 
     def _on_ai_chunk(self, chunk: str):
-        cursor = self.preview.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.End)
-        cursor.insertText(chunk)
-        self.preview.setTextCursor(cursor)
-        self.preview.ensureCursorVisible()
+        append_streaming_text(self.preview, chunk)
 
     def _on_ai_finished(self, result: str):
         self.progress.hide()

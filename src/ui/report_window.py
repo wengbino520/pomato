@@ -1,8 +1,8 @@
 from datetime import date, timedelta
 import re
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QFont, QTextCursor
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -17,8 +17,10 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
+from src.services.ai_worker import AIReportWorker
 from src.services.logger import get_logger
 from src.ui.styles import btn_style
+from src.ui.utils import append_streaming_text
 
 logger = get_logger(__name__)
 
@@ -40,34 +42,6 @@ def _get_period_range(dt: date, period: str) -> tuple[date, date]:
     raise ValueError(f"Unknown period: {period}")
 
 
-class _AIWorker(QThread):
-    chunk_received = pyqtSignal(str)
-    finished = pyqtSignal(str)
-    error = pyqtSignal(str)
-
-    def __init__(self, ai_client, entries: list[dict], report_date: str,
-                 todos: list[dict] | None = None, period: str = "daily"):
-        super().__init__()
-        self.ai_client = ai_client
-        self.entries = entries
-        self.report_date = report_date
-        self.todos = todos or []
-        self.period = period
-
-    def run(self):
-        try:
-            result = self.ai_client.generate_report(
-                self.entries,
-                self.report_date,
-                on_chunk=lambda c: self.chunk_received.emit(c),
-                todos=self.todos if self.todos else None,
-                period=self.period,
-            )
-            self.finished.emit(result)
-        except Exception as exc:
-            self.error.emit(str(exc))
-
-
 PERIOD_NAMES = {"daily": "日报", "weekly": "周报", "monthly": "月报"}
 
 
@@ -83,7 +57,7 @@ class ReportWindow(QDialog):
         self._dt = date.fromisoformat(self.report_date)
         self._start_date, self._end_date = _get_period_range(self._dt, self._period)
         self.entries = self._load_entries()
-        self._worker: _AIWorker | None = None
+        self._worker: AIReportWorker | None = None
         self._setup_ui()
         # 从明确入口打开时隐藏周期下拉框（入口名称即周期）
         self.period_combo.hide()
@@ -231,19 +205,15 @@ class ReportWindow(QDialog):
             self._start_date.isoformat(), self._end_date.isoformat()
         )
 
-        self._worker = _AIWorker(self.ai_client, self.entries, self.report_date,
-                                 todos=todos, period=self._period)
+        self._worker = AIReportWorker(self.ai_client, self.entries, self.report_date,
+                                       todos=todos, period=self._period)
         self._worker.chunk_received.connect(self._on_chunk)
         self._worker.finished.connect(self._on_finished)
         self._worker.error.connect(self._on_error)
         self._worker.start()
 
     def _on_chunk(self, chunk: str):
-        cursor = self.editor.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.End)
-        cursor.insertText(chunk)
-        self.editor.setTextCursor(cursor)
-        self.editor.ensureCursorVisible()
+        append_streaming_text(self.editor, chunk)
 
     def _on_finished(self, result: str):
         self.progress.hide()

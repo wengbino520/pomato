@@ -1,5 +1,3 @@
-import sys
-
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QKeySequence, QShortcut, QTextCursor
 from PyQt6.QtWidgets import (
@@ -15,6 +13,7 @@ from PyQt6.QtWidgets import (
 
 from src.ui.todo_link_widget import TodoLinkWidget
 from src.ui.tag_selector_widget import TagSelectorWidget
+from src.ui.utils import setup_topmost_dialog, show_and_focus
 
 from src.services.logger import get_logger
 
@@ -49,13 +48,7 @@ class PopupWindow(QDialog):
 
     def _setup_window(self):
         self.setWindowTitle(f"POMATO · 第{self.session_no}个番茄钟完成")
-        # Dialog → Window: 避免 Linux 下输入法框架 (fcitx/ibus) 忽略弹窗
-        self.setWindowFlags(
-            Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Window
-        )
-        self.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled, True)
-        self.setMinimumWidth(440)
-        self.setModal(False)
+        setup_topmost_dialog(self, min_width=440)
 
     # ------------------------------------------------------------------
     # UI construction
@@ -262,22 +255,5 @@ class PopupWindow(QDialog):
     # ── Public: bring to foreground ─────────────────────────
 
     def show_and_focus(self):
-        self._timeout_timer.start(self.timeout_seconds * 1000)
-        self.show()
-        self.raise_()
-        self.activateWindow()
-        self._force_foreground()
-        self.text_edit.setFocus()
-
-    def _force_foreground(self):
-        """Best-effort foreground window (Windows only)."""
-        if sys.platform != "win32":
-            return
-        try:
-            import ctypes
-            hwnd = int(self.winId())
-            # Simulate a key event so SetForegroundWindow is allowed
-            ctypes.windll.user32.keybd_event(0, 0, 0, 0)
-            ctypes.windll.user32.SetForegroundWindow(hwnd)
-        except Exception:
-            logger.debug("ctypes foreground window failed", exc_info=True)
+        show_and_focus(self, self._timeout_timer, self.timeout_seconds,
+                       focus_widget=self.text_edit)
