@@ -4,8 +4,7 @@ tests/test_reminder_engine.py
 
 覆盖：待办管理(T24) + 提醒调度(T25) + TimerEngine tick集成(T26)
 """
-import pytest
-from datetime import datetime as _real_dt, date as _real_date, timedelta
+from datetime import datetime as _real_dt, date as _real_date
 from unittest.mock import MagicMock, patch
 
 

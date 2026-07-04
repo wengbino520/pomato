@@ -2,7 +2,6 @@
 TASK-23: 数据库提醒方法测试
 tests/test_database_reminders.py
 """
-import pytest
 
 
 class TestAddReminder:

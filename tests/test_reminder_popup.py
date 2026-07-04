@@ -4,8 +4,7 @@ tests/test_reminder_popup.py
 
 覆盖：弹窗创建/显示/按钮/信号/快捷键/超时
 """
-import pytest
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QKeySequence, QShortcut
 
 from src.ui.reminder_popup import ReminderPopup

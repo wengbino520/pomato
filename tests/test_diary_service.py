@@ -1,4 +1,3 @@
-import pytest
 
 from src.services.diary_service import DiaryService
 

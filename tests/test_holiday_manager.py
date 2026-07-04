@@ -5,7 +5,6 @@ HolidayManager 的正确性、边界值、异常场景测试。
 import json
 import pytest
 from datetime import date
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 from src.services.holiday_manager import HolidayManager

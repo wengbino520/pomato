@@ -9,11 +9,8 @@ tests/test_popup_window.py
   US-04 — BreakReminderWindow 淡入/淡出/点击关闭
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication
 
 from src.ui.popup_window import PopupWindow
 from src.ui.break_reminder import BreakReminderWindow
@@ -71,7 +68,7 @@ class TestPopupContextLabel:
 
         from PyQt6.QtWidgets import QLabel
         labels = pw.findChildren(QLabel)
-        texts = [l.text() for l in labels]
+        texts = [lbl.text() for lbl in labels]
         assert any("上一轮" in t for t in texts)
         pw.close()
 
@@ -82,7 +79,7 @@ class TestPopupContextLabel:
 
         from PyQt6.QtWidgets import QLabel
         labels = pw.findChildren(QLabel)
-        texts = [l.text() for l in labels]
+        texts = [lbl.text() for lbl in labels]
         assert any("第一个番茄钟" in t for t in texts)
         pw.close()
 
@@ -94,7 +91,7 @@ class TestPopupContextLabel:
 
         from PyQt6.QtWidgets import QLabel
         labels = pw.findChildren(QLabel)
-        context_texts = [l.text() for l in labels if "上一轮" in l.text()]
+        context_texts = [lbl.text() for lbl in labels if "上一轮" in lbl.text()]
         assert len(context_texts) == 1
         assert "…" in context_texts[0]
         assert len(context_texts[0]) < 60  # truncated
@@ -194,7 +191,7 @@ class TestPopupKeyboardShortcuts:
 
         mock = MagicMock()
         pw.skipped.connect(mock)
-        from PyQt6.QtGui import QKeySequence, QShortcut
+        from PyQt6.QtGui import QShortcut
         # Find and trigger the Ctrl+D shortcut
         for child in pw.findChildren(QShortcut):
             if child.key().toString() == "Ctrl+D":

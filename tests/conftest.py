@@ -2,7 +2,6 @@
 共享测试夹具（fixtures）。
 """
 import sys
-import json
 from pathlib import Path
 from unittest.mock import patch
 

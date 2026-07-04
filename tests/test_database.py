@@ -309,7 +309,6 @@ class TestDatabaseExceptionScenarios:
 
     def test_database_initializes_idempotently(self, tmp_path):
         """多次初始化 Database 不会破坏已有数据。"""
-        from pathlib import Path
         from unittest.mock import patch
 
         with patch("pathlib.Path.home", return_value=tmp_path):
@@ -735,7 +734,6 @@ class TestBackup:
 
     def test_backup_creates_file_on_first_init(self, tmp_path):
         """首次初始化应创建备份文件。"""
-        from pathlib import Path
         from unittest.mock import patch
 
         with patch("pathlib.Path.home", return_value=tmp_path):
@@ -749,7 +747,6 @@ class TestBackup:
 
     def test_backup_skips_when_todays_backup_exists(self, tmp_path):
         """同一天第二次初始化不应创建重复备份。"""
-        from pathlib import Path
         from unittest.mock import patch
         from datetime import date
 
@@ -773,7 +770,6 @@ class TestBackup:
 
     def test_backup_cleans_old_backups(self, tmp_path):
         """超过 _MAX_BACKUPS 份备份时应清理最旧的。"""
-        from pathlib import Path
         from unittest.mock import patch
         from datetime import date, timedelta, datetime as dt
         import os
@@ -803,7 +799,6 @@ class TestBackup:
     def test_backup_file_is_valid_sqlite(self, tmp_path):
         """备份文件应是有效的 SQLite 数据库。"""
         import sqlite3
-        from pathlib import Path
         from unittest.mock import patch
 
         with patch("pathlib.Path.home", return_value=tmp_path):

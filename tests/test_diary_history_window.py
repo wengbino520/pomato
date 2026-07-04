@@ -1,4 +1,3 @@
-from PyQt6.QtCore import Qt
 
 from src.ui.diary_history_window import DiaryHistoryWindow
 

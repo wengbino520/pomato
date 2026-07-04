@@ -13,7 +13,7 @@ from PyQt6.QtCore import (
     QTimer,
     pyqtProperty,
 )
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen
+from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from src.services.logger import get_logger

@@ -3,7 +3,6 @@ tests/test_timer_engine.py
 TimerEngine 状态机、信号、暂停/恢复、自动启动逻辑的完整测试。
 需要 qapp fixture（conftest.py 提供）。
 """
-import pytest
 from datetime import datetime as _real_dt, date as _real_date
 from unittest.mock import MagicMock, patch
 

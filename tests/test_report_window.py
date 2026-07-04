@@ -2,10 +2,8 @@
 tests/test_report_window.py
 ReportWindow 的 Markdown→纯文本 转换与 Word 导出内容正确性测试。
 """
-import pytest
-import re as _re_mod
 from datetime import date
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch
 
 from PyQt6.QtWidgets import QDialog
 

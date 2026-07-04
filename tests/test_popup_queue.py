@@ -5,7 +5,6 @@ tests/test_popup_queue.py
 覆盖：TrayManager 弹窗队列（idle/busy/enqueue/dequeue/overflow）
 """
 import pytest
-from collections import deque
 from unittest.mock import MagicMock, patch
 
 from src.app import TrayManager

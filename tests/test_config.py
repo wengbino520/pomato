@@ -3,11 +3,9 @@ tests/test_config.py
 Config 模块的正确性、边界值和异常场景测试。
 """
 import json
-import pytest
-from pathlib import Path
 from unittest.mock import patch
 
-from src.core.config import Config, DEFAULT_CONFIG
+from src.core.config import Config
 from src.services import logger as logger_module
 
 

@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QScrollArea, QPushButton, QLabel, QFrame,
     QDialog, QDialogButtonBox, QLineEdit, QTimeEdit,
-    QComboBox, QSpinBox, QDateEdit, QMessageBox, QMenu,
+    QComboBox, QSpinBox, QDateEdit, QMessageBox,
 )
 
 from src.services.logger import get_logger

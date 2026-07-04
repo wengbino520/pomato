@@ -4,7 +4,7 @@
 统一标签选择体验：点击按钮切换，支持多选。
 """
 
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QWidget
 
 from src.services.logger import get_logger
 

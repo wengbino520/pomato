@@ -9,14 +9,13 @@ E2E 测试 —— 模拟完整用户工作流 (ID-02)
 
 import sys
 from datetime import date
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-from PyQt6.QtCore import Qt
 
 from src.services.timer_engine import TimerEngine, TimerState
 from src.services.reminder_engine import ReminderEngine
-from src.ui.main_window import EntryItem, MainWindow
+from src.ui.main_window import MainWindow
 from src.ui.popup_window import PopupWindow
 
 

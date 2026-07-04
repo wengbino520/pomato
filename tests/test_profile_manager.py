@@ -3,7 +3,6 @@
 import json
 import sqlite3
 import pytest
-from pathlib import Path
 from unittest.mock import patch
 
 from src.core.profile_manager import ProfileManager
