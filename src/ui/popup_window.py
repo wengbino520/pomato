@@ -1,4 +1,4 @@
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QTimer, pyqtSignal
 from PyQt6.QtGui import QKeySequence, QShortcut, QTextCursor
 from PyQt6.QtWidgets import (
     QDialog,
@@ -8,10 +8,8 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QTextEdit,
     QVBoxLayout,
-    QWidget,
 )
 
-from src.ui.todo_link_widget import TodoLinkWidget
 from src.ui.tag_selector_widget import TagSelectorWidget
 from src.ui.utils import setup_topmost_dialog, show_and_focus
 

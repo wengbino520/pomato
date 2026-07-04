@@ -1,6 +1,5 @@
 import sqlite3
 import json
-import shutil
 from datetime import datetime, date
 from pathlib import Path
 

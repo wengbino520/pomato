@@ -3,14 +3,12 @@ from datetime import date
 from PyQt6.QtCore import QDate, Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QCloseEvent, QFontMetrics, QResizeEvent
 from PyQt6.QtWidgets import (
-    QComboBox,
     QDialog,
     QDialogButtonBox,
     QDateEdit,
     QFrame,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPushButton,

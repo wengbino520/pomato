@@ -18,7 +18,6 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from src.services.ai_client import AIClient
 from src.services.ai_worker import AIReportWorker
 from src.services.logger import get_logger
 from src.ui.utils import append_streaming_text

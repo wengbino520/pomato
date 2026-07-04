@@ -79,7 +79,7 @@ class ReportWindow(QDialog):
 
         # header
         hl = QHBoxLayout()
-        title = QLabel(f"📋 生成报告")
+        title = QLabel("📋 生成报告")
         title.setStyleSheet("font-size:15px; font-weight:bold; color:#333;")
 
         # Period selector
@@ -319,7 +319,7 @@ class ReportWindow(QDialog):
         """将日报导出为 Word (.docx) 文件。"""
         try:
             from docx import Document
-            from docx.shared import Pt, Inches, RGBColor
+            from docx.shared import Pt, RGBColor
             from docx.enum.text import WD_ALIGN_PARAGRAPH
         except ImportError:
             QMessageBox.warning(
@@ -391,7 +391,6 @@ class ReportWindow(QDialog):
     @staticmethod
     def _add_markdown_inline(paragraph, text: str):
         """将带 Markdown 内联格式的文本添加到 Word 段落。"""
-        from docx.shared import Pt
         import re as _re
 
         # Split on **bold** and *italic* markers
