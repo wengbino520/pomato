@@ -9,7 +9,7 @@ import sys
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QTextCursor
 from PyQt6.QtWidgets import (
-    QDialog, QHBoxLayout, QLabel, QSpinBox, QTextEdit, QWidget,
+    QDialog, QHBoxLayout, QLabel, QMessageBox, QSpinBox, QTextEdit, QWidget,
 )
 
 from src.services.logger import get_logger
@@ -125,16 +125,18 @@ def create_time_row(start_h: int, start_m: int, end_h: int, end_m: int):
     return row, start_hour, start_minute, end_hour, end_minute
 
 
-def validate_time_range(start_hour: QSpinBox, start_minute: QSpinBox,
+def validate_time_range(parent: QWidget, start_hour: QSpinBox, start_minute: QSpinBox,
                         end_hour: QSpinBox, end_minute: QSpinBox) -> bool:
-    """Validate that end time is after start time.
+    """Validate that end time is after start time, showing a warning if not.
 
-    Returns True if valid, False otherwise.  Caller is responsible for
-    showing any warning dialog.
+    Returns True if valid, False otherwise.
     """
     start_total = start_hour.value() * 60 + start_minute.value()
     end_total = end_hour.value() * 60 + end_minute.value()
-    return start_total < end_total
+    if start_total >= end_total:
+        QMessageBox.warning(parent, "时间不合法", "结束时间必须晚于开始时间。")
+        return False
+    return True
 
 
 def format_time_value(hour: QSpinBox, minute: QSpinBox) -> str:
