@@ -155,4 +155,4 @@ class ReminderPopup(QDialog):
             ctypes.windll.user32.keybd_event(0, 0, 0, 0)
             ctypes.windll.user32.SetForegroundWindow(hwnd)
         except Exception:
-            pass
+            logger.debug("ctypes foreground window failed", exc_info=True)

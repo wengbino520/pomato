@@ -53,7 +53,7 @@ class EditEntryDialog(QDialog):
                 try:
                     return int(parts[0]), int(parts[1])
                 except (IndexError, ValueError):
-                    pass
+                    logger.debug("Failed to parse time string: %s", t)
             return default_h, default_m
 
         sh, sm = _parse_hm(entry.get("start_time"), 9, 0)

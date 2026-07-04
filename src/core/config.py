@@ -106,7 +106,7 @@ class Config:
                 encrypted = win32crypt.CryptProtectData(value.encode("utf-8"), "POMATO", None, None, None, 0)
                 return "dpapi:" + base64.b64encode(encrypted).decode("ascii")
             except Exception:
-                logger.warning("DPAPI encryption failed, falling back to XOR")
+                logger.debug("DPAPI encryption unavailable, falling back to XOR", exc_info=True)
 
         token = self._xor_bytes(value.encode("utf-8"))
         return "xor:" + base64.b64encode(token).decode("ascii")
@@ -134,6 +134,7 @@ class Config:
             logger.warning("Unencrypted API key detected in config; will encrypt on next save")
             return encoded
         except Exception:
+            logger.warning("Failed to decrypt API key, returning empty", exc_info=True)
             return ""
 
     @staticmethod
@@ -220,7 +221,7 @@ class Config:
                 if desktop_file.exists():
                     desktop_file.unlink()
         except Exception:
-            logger.debug("Failed to sync Linux autostart", exc_info=True)
+            logger.exception("Failed to sync autostart desktop file")
 
     def _build_autostart_command(self) -> str:
         if getattr(sys, "frozen", False):

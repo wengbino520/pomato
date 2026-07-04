@@ -87,6 +87,7 @@ class HolidayManager:
                     if any(k.startswith(current_year) for k in self._cache):
                         self._last_fetch_year = date.today().year
             except Exception:
+                logger.warning("Failed to load holiday cache, starting fresh", exc_info=True)
                 self._cache = {}
 
     def _save_cache(self):
@@ -138,6 +139,7 @@ class HolidayManager:
                     "name": str(info.get("name", "")),
                 }
             except (ValueError, TypeError):
+                logger.debug("Skipping malformed holiday entry: %s", mmdd, exc_info=True)
                 continue
 
         self._last_fetch_year = year

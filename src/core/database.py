@@ -510,6 +510,7 @@ class Database:
             try:
                 tags = json.loads(row["tags"])
             except (json.JSONDecodeError, TypeError):
+                logger.debug("Failed to parse tags JSON for latest entry, defaulting to empty", exc_info=True)
                 tags = []
             return row["content"], tags
         return "", []

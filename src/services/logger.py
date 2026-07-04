@@ -73,6 +73,7 @@ def setup_logging(log_dir: str | Path = "", *, console: bool = False, force: boo
         try:
             handler.close()
         except Exception:
+            # Cannot use logger during handler teardown; safe to ignore.
             pass
     root.handlers.clear()
 
