@@ -127,8 +127,8 @@ class TestTodoRefresh:
 
     def test_refresh_with_date_param(self, todo_widget, reminder_engine):
         """传入 date_str 参数 refresh 只显示该日期的待办。"""
-        reminder_engine.add_todo("今天的", priority=1, due_date="2025-07-01")
-        reminder_engine.add_todo("明天的", priority=1, due_date="2025-07-02")
+        reminder_engine.add_todo("今天的", priority=1, due_date="2025-07-01", todo_date="2025-07-01")
+        reminder_engine.add_todo("明天的", priority=1, due_date="2025-07-02", todo_date="2025-07-02")
         todo_widget.refresh("2025-07-01")
         from PyQt6.QtWidgets import QLabel
         labels = todo_widget._cards_widget.findChildren(QLabel)
@@ -188,7 +188,7 @@ class TestTodoToggle:
         """今日视图中勾选过去的待办，日期移到今天。"""
         today = QDate.currentDate().toString("yyyy-MM-dd")
         past = "2024-01-01"
-        tid = reminder_engine.add_todo("过去任务", priority=1, due_date=past)
+        tid = reminder_engine.add_todo("过去任务", priority=1, due_date=past, todo_date=past)
         todo_widget._current_date = today
         todo_widget._on_toggle(tid, True)
         todo = reminder_engine.db.get_todo(tid)
