@@ -4,7 +4,7 @@ TodoListWidget 单元测试
 覆盖：初始化、refresh 展示、添加待办、切换状态、编辑、删除、日期偏移、信号。
 """
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from PyQt6.QtCore import QDate
 
