@@ -92,8 +92,9 @@ class EditEntryDialog(QDialog):
         layout.addWidget(buttons)
 
     def _on_accept(self):
-        if not validate_time_range(self, self.start_hour, self.start_minute,
+        if not validate_time_range(self.start_hour, self.start_minute,
                                    self.end_hour, self.end_minute):
+            QMessageBox.warning(self, "时间不合法", "结束时间必须晚于开始时间。")
             return
         self.accept()
 
@@ -147,8 +148,9 @@ class AddEntryDialog(QDialog):
         layout.addWidget(buttons)
 
     def _on_accept(self):
-        if not validate_time_range(self, self.start_hour, self.start_minute,
+        if not validate_time_range(self.start_hour, self.start_minute,
                                    self.end_hour, self.end_minute):
+            QMessageBox.warning(self, "时间不合法", "结束时间必须晚于开始时间。")
             return
         content = self.content_edit.toPlainText().strip()
         if not content:
