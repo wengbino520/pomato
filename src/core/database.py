@@ -290,12 +290,14 @@ class Database:
         with self._get_conn() as conn:
             if start_time is not None and end_time is not None:
                 conn.execute(
-                    "UPDATE pomodoro_entries SET content=?, tags=?, start_time=?, end_time=?, todo_id=? WHERE id=?",
+                    "UPDATE pomodoro_entries SET content=?, tags=?, skipped=0, "
+                    "start_time=?, end_time=?, todo_id=? WHERE id=?",
                     (content, tags_json, start_time, end_time, todo_id, entry_id),
                 )
             else:
                 conn.execute(
-                    "UPDATE pomodoro_entries SET content=?, tags=?, todo_id=? WHERE id=?",
+                    "UPDATE pomodoro_entries SET content=?, tags=?, skipped=0, "
+                    "todo_id=? WHERE id=?",
                     (content, tags_json, todo_id, entry_id),
                 )
 
