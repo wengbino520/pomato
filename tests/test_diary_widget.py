@@ -1,3 +1,5 @@
+from PyQt6.QtGui import QImage
+
 from src.ui.diary_widget import DiaryWidget
 
 
@@ -95,3 +97,17 @@ def test_widget_can_insert_basic_html_table(qapp, tmp_db):
     assert "<table" in html.lower()
     assert "<td" in html.lower()
     assert "<tr" in html.lower()
+
+
+def test_widget_persisted_pasted_image_records_attachment_metadata(qapp, tmp_db):
+    widget = DiaryWidget(tmp_db, DummyConfig())
+    widget.refresh("2026-07-03")
+
+    image = QImage(12, 12, QImage.Format.Format_ARGB32)
+    image.fill(0xFF336699)
+    widget._handle_pasted_image(image)
+
+    entry = tmp_db.get_diary_entry("2026-07-03")
+    assert entry["attachments_json"]
+    assert entry["attachments_json"][0]["path"].endswith(".png")
+    assert entry["attachments_json"][0]["path"].startswith(str(tmp_db.data_dir))

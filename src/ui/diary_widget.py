@@ -65,6 +65,7 @@ class DiaryWidget(QWidget):
         self._current_date: str | None = None
         self._loading = False
         self._dirty = False
+        self._attachments_json: list[dict] = []
         self._build_ui()
 
     def _build_ui(self):
@@ -206,6 +207,7 @@ class DiaryWidget(QWidget):
         hints = self.service.get_diary_prompt_hints(date_str)
 
         self._loading = True
+        self._attachments_json = list(context.get("attachments_json") or [])
         self._date_label.setText(f"📓 日记  {date_str}")
         self._summary_label.setText(self._build_summary_text(context))
         self._hint_label.setText(self._build_hint_text(hints))
@@ -241,8 +243,12 @@ class DiaryWidget(QWidget):
         filename = f"paste_{abs(hash((self._current_date, image.width(), image.height(), image.text())))}.png"
         path = target_dir / filename
         image.save(str(path))
-        thumb = QPixmap.fromImage(image)
+        attachment = {"id": filename, "path": str(path), "name": filename, "mime_type": "image/png"}
+        if not any(existing.get("path") == attachment["path"] for existing in self._attachments_json):
+            self._attachments_json.append(attachment)
         self._content_edit.insertHtml(f'<img src="{path.as_posix()}" width="320"/>')
+        self._mark_dirty()
+        self.save_entry(silent=True)
 
     def save_entry(self, silent: bool = False):
         if not self._current_date:
@@ -266,7 +272,7 @@ class DiaryWidget(QWidget):
         return {
             "content": plain_content,
             "content_html": html_content,
-            "attachments_json": [],
+            "attachments_json": self._attachments_json,
             "mood_score": mood_score,
             "mood_emoji": mood_emoji,
             "energy_score": self._energy_combo.currentData(),
