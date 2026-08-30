@@ -1,8 +1,15 @@
+from __future__ import annotations
+
 import sys
 import os
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
+
+if sys.version_info < (3, 10):
+    raise RuntimeError(
+        "POMATO requires Python 3.10+ because it targets Qt6 and uses Python 3.10+ type syntax."
+    )
 
 # ── Windows DLL fix (must run BEFORE any PyQt6 import) ────────────────────────
 # Anaconda ships vcruntime140_threads.dll 14.42.x in its root directory,

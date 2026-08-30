@@ -4,6 +4,8 @@ Shared UI utilities (CD-04) — reusable helpers for dialog/window management.
 Consolidates duplicated patterns from PopupWindow, ReminderPopup, ReportWindow,
 HistoryWindow, and entry dialogs into a single importable module.
 """
+from __future__ import annotations
+
 import sys
 
 from PyQt6.QtCore import Qt, QTimer

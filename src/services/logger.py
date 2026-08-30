@@ -12,6 +12,8 @@ POMATO 统一日志模块。
     文件:   DEBUG 及以上，JSON 结构化格式，按天轮转，存储在 ~/.pomato/logs/
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import sys
