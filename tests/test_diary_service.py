@@ -83,3 +83,16 @@ class TestDiaryServiceHints:
 
         assert any("成就感" in hint for hint in hints)
         assert not any("没有按预期完成" in hint for hint in hints)
+
+    def test_upsert_diary_entry_preserves_rich_content_and_attachments(self, tmp_db):
+        entry = tmp_db.upsert_diary_entry(
+            "2026-07-03",
+            content="今天做了复盘",
+            content_html="<p>今天做了复盘</p><table><tr><td>结果</td></tr></table>",
+            attachments_json=[{"id": "img-1", "path": "diary_attachments/2026-07-03/img-1.png"}],
+        )
+
+        assert entry["content"] == "今天做了复盘"
+        assert "<table" in entry["content_html"]
+        assert entry["attachments_json"] == [{"id": "img-1", "path": "diary_attachments/2026-07-03/img-1.png"}]
+        assert entry["has_rich_media"] == 1

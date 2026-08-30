@@ -161,7 +161,11 @@ class DiaryHistoryWindow(QDialog):
             f"✅ 待办 {context['todo_done']}/{context['todo_total']}\n"
             f"最后更新：{(entry.get('updated_at') or '').replace('T', ' ')[:16] or '未保存'}"
         )
-        self.preview_content.setPlainText(entry.get("content") or "（仅状态记录，无正文内容）")
+        html_content = entry.get("content_html") or ""
+        if html_content.strip():
+            self.preview_content.setHtml(html_content)
+        else:
+            self.preview_content.setPlainText(entry.get("content") or "（仅状态记录，无正文内容）")
 
     def _open_selected_date(self):
         if self._current_date and self._on_open_date:

@@ -83,3 +83,15 @@ def test_widget_auto_saves_dirty_content_on_date_switch(qapp, tmp_db):
     previous_entry = tmp_db.get_diary_entry("2026-07-03")
     assert previous_entry["content"] == "未手动保存的草稿"
     assert widget._content_edit.toPlainText() == ""
+
+
+def test_widget_can_insert_basic_html_table(qapp, tmp_db):
+    widget = DiaryWidget(tmp_db, DummyConfig())
+    widget.refresh("2026-07-03")
+
+    widget.insert_table(2, 2)
+
+    html = widget._content_edit.toHtml()
+    assert "<table" in html.lower()
+    assert "<td" in html.lower()
+    assert "<tr" in html.lower()

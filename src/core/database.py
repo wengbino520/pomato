@@ -36,9 +36,21 @@ class Database:
 
     @staticmethod
     def _deserialize_diary(row) -> dict:
-        """Convert a diary_entries row to dict with parsed tags JSON."""
+        """Convert a diary_entries row to dict with parsed JSON fields."""
         d = dict(row)
         d["tags"] = json.loads(d["tags"])
+        raw_attachments = d.get("attachments_json")
+        if raw_attachments in (None, ""):
+            d["attachments_json"] = []
+        else:
+            try:
+                parsed = json.loads(raw_attachments)
+                d["attachments_json"] = parsed if isinstance(parsed, list) else []
+            except (TypeError, ValueError):
+                d["attachments_json"] = []
+        d["content_html"] = d.get("content_html") or d.get("content") or ""
+        if d.get("has_rich_media") is None:
+            d["has_rich_media"] = 1 if bool(d.get("content_html") and d.get("content_html") != d.get("content")) else 0
         return d
 
     def __init__(self, data_dir: Path | None = None):
@@ -140,6 +152,9 @@ class Database:
                     id           INTEGER PRIMARY KEY AUTOINCREMENT,
                     entry_date   TEXT NOT NULL UNIQUE,
                     content      TEXT NOT NULL DEFAULT '',
+                    content_html TEXT DEFAULT '',
+                    attachments_json TEXT NOT NULL DEFAULT '[]',
+                    has_rich_media INTEGER NOT NULL DEFAULT 0,
                     mood_score   INTEGER,
                     mood_emoji   TEXT,
                     energy_score INTEGER,
@@ -188,6 +203,26 @@ class Database:
 
                 CREATE INDEX IF NOT EXISTS idx_reminders_enabled ON reminders(enabled);
             """)
+
+            # Migration: add rich diary fields for HTML/image support
+            for field_sql in (
+                "ALTER TABLE diary_entries ADD COLUMN content_html TEXT DEFAULT ''",
+                "ALTER TABLE diary_entries ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'",
+                "ALTER TABLE diary_entries ADD COLUMN has_rich_media INTEGER NOT NULL DEFAULT 0",
+            ):
+                try:
+                    conn.execute(field_sql)
+                except sqlite3.OperationalError:
+                    logger.debug("Migration: diary rich-field already exists")
+            conn.execute(
+                "UPDATE diary_entries SET content_html = content WHERE content_html IS NULL OR content_html = '' AND content IS NOT NULL"
+            )
+            conn.execute(
+                "UPDATE diary_entries SET attachments_json = '[]' WHERE attachments_json IS NULL"
+            )
+            conn.execute(
+                "UPDATE diary_entries SET has_rich_media = 0 WHERE has_rich_media IS NULL"
+            )
 
             # Migration: add todo_date column if missing (added in TASK-02)
             try:
@@ -407,6 +442,9 @@ class Database:
         self,
         date_str: str,
         content: str = "",
+        content_html: str | None = None,
+        attachments_json: list | str | None = None,
+        has_rich_media: bool | int | None = None,
         mood_score: int | None = None,
         mood_emoji: str | None = None,
         energy_score: int | None = None,
@@ -416,6 +454,19 @@ class Database:
     ):
         date_str = self._require_iso_date(date_str, "entry_date")
         normalized_content = (content or "").strip()
+        normalized_content_html = (content_html or "").strip() if content_html is not None else normalized_content
+        if isinstance(attachments_json, str):
+            try:
+                parsed = json.loads(attachments_json)
+                attachments_list = parsed if isinstance(parsed, list) else []
+            except (TypeError, ValueError):
+                attachments_list = []
+        else:
+            attachments_list = list(attachments_json or [])
+        attachments_json_text = json.dumps(attachments_list, ensure_ascii=False)
+        rich_media_flag = 1 if has_rich_media is True else 0
+        if has_rich_media is None:
+            rich_media_flag = 1 if bool(normalized_content_html and normalized_content_html != normalized_content) or bool(attachments_list) else 0
         tags_json = json.dumps(tags or [], ensure_ascii=False)
         now = datetime.now().isoformat()
         word_count = len(normalized_content.split()) if normalized_content else 0
@@ -423,11 +474,15 @@ class Database:
         with self._get_conn() as conn:
             conn.execute(
                 """INSERT INTO diary_entries
-                       (entry_date, content, mood_score, mood_emoji, energy_score,
+                       (entry_date, content, content_html, attachments_json, has_rich_media,
+                        mood_score, mood_emoji, energy_score,
                         stress_score, tags, word_count, ai_summary, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(entry_date) DO UPDATE SET
                        content=excluded.content,
+                       content_html=excluded.content_html,
+                       attachments_json=excluded.attachments_json,
+                       has_rich_media=excluded.has_rich_media,
                        mood_score=excluded.mood_score,
                        mood_emoji=excluded.mood_emoji,
                        energy_score=excluded.energy_score,
@@ -439,6 +494,9 @@ class Database:
                 (
                     date_str,
                     normalized_content,
+                    normalized_content_html,
+                    attachments_json_text,
+                    rich_media_flag,
                     mood_score,
                     mood_emoji,
                     energy_score,

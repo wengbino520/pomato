@@ -1,4 +1,5 @@
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -31,6 +32,26 @@ _CARD_STYLE = (
     f"QFrame {{ background:{COLORS['white']}; border:1px solid {COLORS['grey_border_light']};"
     f" border-radius:8px; }}"
 )
+
+
+class RichDiaryTextEdit(QTextEdit):
+    """允许粘贴图片和富文本的日记编辑器。"""
+
+    def canInsertFromMimeData(self, source):
+        if source is not None and source.hasImage():
+            return True
+        return super().canInsertFromMimeData(source)
+
+    def insertFromMimeData(self, source):
+        if source is not None and source.hasImage():
+            image = source.imageData()
+            if isinstance(image, QImage):
+                if hasattr(self.parent(), "_handle_pasted_image"):
+                    self.parent()._handle_pasted_image(image)
+                    return
+            super().insertFromMimeData(source)
+            return
+        super().insertFromMimeData(source)
 
 
 class DiaryWidget(QWidget):
@@ -77,7 +98,8 @@ class DiaryWidget(QWidget):
         content_title.setStyleSheet(f"font-size:13px; font-weight:bold; color:{COLORS['grey_dark']};")
         content_layout.addWidget(content_title)
 
-        self._content_edit = QTextEdit()
+        self._content_edit = RichDiaryTextEdit(self)
+        self._content_edit.setAcceptRichText(True)
         self._content_edit.setStyleSheet(STYLES["text_edit"])
         self._content_edit.setPlaceholderText("写下今天的工作、状态或任何值得记录的片段……")
         self._content_edit.setMinimumHeight(360)
@@ -187,13 +209,40 @@ class DiaryWidget(QWidget):
         self._date_label.setText(f"📓 日记  {date_str}")
         self._summary_label.setText(self._build_summary_text(context))
         self._hint_label.setText(self._build_hint_text(hints))
-        self._content_edit.setPlainText(context["content"])
+        html_content = context.get("content_html") or ""
+        if html_content.strip():
+            self._content_edit.setHtml(html_content)
+        else:
+            self._content_edit.setPlainText(context["content"])
         self._set_state_value(self._mood_combo, self._find_mood_data(context))
         self._set_state_value(self._energy_combo, context["energy_score"])
         self._set_state_value(self._stress_combo, context["stress_score"])
         self._status_label.setText(self._build_status_text(context))
         self._loading = False
         self._dirty = False
+
+    def insert_table(self, rows: int = 2, cols: int = 2):
+        table_html = "<table border='1' cellpadding='4' cellspacing='0' style='border-collapse:collapse; width:100%;'>"
+        for _ in range(rows):
+            table_html += "<tr>"
+            for _ in range(cols):
+                table_html += "<td> </td>"
+            table_html += "</tr>"
+        table_html += "</table><br>"
+        self._content_edit.insertHtml(table_html)
+
+    def _handle_pasted_image(self, image: QImage):
+        if image.isNull():
+            return
+        if not self._current_date:
+            return
+        target_dir = self.db.data_dir / "diary_attachments" / self._current_date
+        target_dir.mkdir(parents=True, exist_ok=True)
+        filename = f"paste_{abs(hash((self._current_date, image.width(), image.height(), image.text())))}.png"
+        path = target_dir / filename
+        image.save(str(path))
+        thumb = QPixmap.fromImage(image)
+        self._content_edit.insertHtml(f'<img src="{path.as_posix()}" width="320"/>')
 
     def save_entry(self, silent: bool = False):
         if not self._current_date:
@@ -212,8 +261,12 @@ class DiaryWidget(QWidget):
         mood_data = self._mood_combo.currentData()
         mood_score = mood_data[0] if mood_data else None
         mood_emoji = mood_data[1] if mood_data else None
+        html_content = self._content_edit.toHtml()
+        plain_content = self._content_edit.toPlainText()
         return {
-            "content": self._content_edit.toPlainText(),
+            "content": plain_content,
+            "content_html": html_content,
+            "attachments_json": [],
             "mood_score": mood_score,
             "mood_emoji": mood_emoji,
             "energy_score": self._energy_combo.currentData(),

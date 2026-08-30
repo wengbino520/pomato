@@ -39,6 +39,8 @@ class DiaryService:
             "diary_exists": diary is not None,
             "diary_word_count": diary["word_count"] if diary else 0,
             "content": diary["content"] if diary else "",
+            "content_html": diary["content_html"] if diary else "",
+            "attachments_json": diary["attachments_json"] if diary else [],
             "mood_score": diary["mood_score"] if diary else None,
             "mood_emoji": diary["mood_emoji"] if diary else None,
             "energy_score": diary["energy_score"] if diary else None,
