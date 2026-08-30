@@ -1,6 +1,16 @@
+import re
+from pathlib import Path
+from urllib.parse import unquote, urlparse
+
 from src.services.logger import get_logger
 
 logger = get_logger(__name__)
+
+_DANGEROUS_BLOCK_TAGS = "script|style|iframe|object|embed|applet|meta|link"
+_URL_ATTR_PATTERN = re.compile(
+    r"(?P<prefix>\s(?:src|href)\s*=\s*)(?P<quote>['\"])(?P<value>.*?)(?P=quote)",
+    flags=re.IGNORECASE | re.DOTALL,
+)
 
 _DEFAULT_HINTS = [
     "今天最值得记下来的一个片段是什么？",
@@ -58,8 +68,136 @@ class DiaryService:
         return context
 
     def save_diary_entry(self, date_str: str, **kwargs) -> dict:
+        previous_entry = self.db.get_diary_entry(date_str) or {}
+        content_html = kwargs.get("content_html")
+        if content_html is not None:
+            content_html = self._sanitize_html(content_html)
+            kwargs["content_html"] = content_html
+        attachments = kwargs.get("attachments_json")
+        if content_html is not None:
+            kwargs["attachments_json"] = self._filter_attachments_for_html(content_html, attachments)
+
         self.db.upsert_diary_entry(date_str, **kwargs)
-        return self.db.get_diary_entry(date_str)
+        entry = self.db.get_diary_entry(date_str)
+        self._cleanup_removed_attachments(
+            previous_entry.get("attachments_json") or [],
+            entry.get("attachments_json") if entry else [],
+        )
+        return entry
+
+    @classmethod
+    def _sanitize_html(cls, content_html: str) -> str:
+        cleaned = content_html or ""
+        cleaned = re.sub(
+            rf"(?is)<({_DANGEROUS_BLOCK_TAGS})\b.*?>.*?</\1>",
+            "",
+            cleaned,
+        )
+        cleaned = re.sub(r"(?is)<(?:meta|link)\b[^>]*?/?>", "", cleaned)
+        cleaned = re.sub(
+            r"\s+on[a-zA-Z]+\s*=\s*(?:\".*?\"|'.*?'|[^\s>]+)",
+            "",
+            cleaned,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        cleaned = re.sub(
+            r"\s+style\s*=\s*(\".*?(?:expression|javascript:|vbscript:).*?\"|'.*?(?:expression|javascript:|vbscript:).*?')",
+            "",
+            cleaned,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        return _URL_ATTR_PATTERN.sub(cls._sanitize_url_attribute, cleaned)
+
+    @staticmethod
+    def _sanitize_url_attribute(match) -> str:
+        value = match.group("value").strip()
+        lowered = value.lower()
+        if lowered.startswith(("javascript:", "vbscript:")):
+            return ""
+        if lowered.startswith("data:") and not lowered.startswith("data:image/"):
+            return ""
+        return match.group(0)
+
+    @staticmethod
+    def _normalize_attachment_path(path_value: str | None) -> str:
+        raw_value = (path_value or "").strip()
+        if not raw_value:
+            return ""
+        parsed = urlparse(raw_value)
+        if parsed.scheme == "file":
+            normalized = unquote(parsed.path)
+            if re.match(r"^/[A-Za-z]:", normalized):
+                normalized = normalized[1:]
+        else:
+            normalized = unquote(raw_value)
+        return normalized.replace("\\", "/")
+
+    @classmethod
+    def _extract_image_sources(cls, content_html: str | None) -> set[str]:
+        matches = re.findall(
+            r"<img\b[^>]*\bsrc=['\"]([^'\"]+)['\"]",
+            content_html or "",
+            flags=re.IGNORECASE,
+        )
+        return {cls._normalize_attachment_path(match) for match in matches}
+
+    @classmethod
+    def _filter_attachments_for_html(cls, content_html: str | None, attachments: list | str | None) -> list[dict]:
+        if isinstance(attachments, str):
+            attachments = []
+        attachments_list = list(attachments or [])
+        if not attachments_list:
+            return []
+        referenced_sources = cls._extract_image_sources(content_html)
+        if not referenced_sources:
+            return []
+
+        filtered = []
+        for attachment in attachments_list:
+            attachment_path = cls._normalize_attachment_path(attachment.get("path"))
+            if attachment_path and attachment_path in referenced_sources:
+                filtered.append(attachment)
+        return filtered
+
+    def _cleanup_removed_attachments(self, previous_attachments: list[dict], current_attachments: list[dict]):
+        current_paths = {
+            self._normalize_attachment_path(attachment.get("path"))
+            for attachment in current_attachments
+        }
+        attachments_root = (self.db.data_dir / "diary_attachments").resolve()
+
+        for attachment in previous_attachments:
+            normalized_path = self._normalize_attachment_path(attachment.get("path"))
+            if not normalized_path or normalized_path in current_paths:
+                continue
+
+            attachment_path = Path(normalized_path)
+            if not attachment_path.is_absolute():
+                attachment_path = self.db.data_dir / attachment_path
+
+            try:
+                resolved_path = attachment_path.resolve()
+            except OSError:
+                logger.debug("Failed to resolve diary attachment path: %s", attachment_path, exc_info=True)
+                continue
+
+            if attachments_root not in resolved_path.parents or not resolved_path.exists():
+                continue
+
+            try:
+                resolved_path.unlink()
+                self._prune_empty_attachment_dirs(resolved_path.parent, attachments_root)
+            except OSError:
+                logger.debug("Failed to remove diary attachment: %s", resolved_path, exc_info=True)
+
+    @staticmethod
+    def _prune_empty_attachment_dirs(current_dir: Path, attachments_root: Path):
+        while current_dir != attachments_root:
+            try:
+                current_dir.rmdir()
+            except OSError:
+                return
+            current_dir = current_dir.parent
 
     def get_diary_prompt_hints(self, date_str: str) -> list[str]:
         context = self.get_daily_context(date_str)

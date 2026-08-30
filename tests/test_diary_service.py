@@ -1,4 +1,6 @@
 
+from pathlib import Path
+
 from src.services.diary_service import DiaryService
 
 
@@ -96,3 +98,66 @@ class TestDiaryServiceHints:
         assert "<table" in entry["content_html"]
         assert entry["attachments_json"] == [{"id": "img-1", "path": "diary_attachments/2026-07-03/img-1.png"}]
         assert entry["has_rich_media"] == 1
+
+    def test_save_diary_entry_sanitizes_unsafe_html(self, tmp_db):
+        service = DiaryService(tmp_db)
+
+        entry = service.save_diary_entry(
+            "2026-07-03",
+            content="安全内容",
+            content_html=(
+                "<p onclick=\"alert(1)\">安全内容</p>"
+                "<script>alert('x')</script>"
+                "<img src=\"javascript:alert(1)\" onerror=\"alert(2)\">"
+            ),
+        )
+
+        html = entry["content_html"].lower()
+        assert "<script" not in html
+        assert "onclick=" not in html
+        assert "onerror=" not in html
+        assert "javascript:" not in html
+
+    def test_save_diary_entry_preserves_supported_rich_elements_after_sanitizing(self, tmp_db):
+        service = DiaryService(tmp_db)
+
+        entry = service.save_diary_entry(
+            "2026-07-03",
+            content="复盘",
+            content_html=(
+                "<p><strong>复盘</strong></p>"
+                "<table><tr><td>事项</td></tr></table>"
+                "<img src=\"diary_attachments/2026-07-03/demo.png\">"
+            ),
+            attachments_json=[{"id": "demo", "path": "diary_attachments/2026-07-03/demo.png", "name": "demo.png"}],
+        )
+
+        html = entry["content_html"].lower()
+        assert "<table" in html
+        assert "<img" in html
+        assert entry["attachments_json"][0]["path"] == "diary_attachments/2026-07-03/demo.png"
+
+    def test_save_diary_entry_removes_orphaned_attachment_files(self, tmp_db):
+        service = DiaryService(tmp_db)
+        attachment_dir = tmp_db.data_dir / "diary_attachments" / "2026-07-03"
+        attachment_dir.mkdir(parents=True, exist_ok=True)
+        attachment_path = attachment_dir / "demo.png"
+        attachment_path.write_bytes(b"fake-image")
+
+        service.save_diary_entry(
+            "2026-07-03",
+            content="带图片的记录",
+            content_html="<p>带图片的记录</p><img src=\"diary_attachments/2026-07-03/demo.png\">",
+            attachments_json=[{"id": "demo", "path": str(Path("diary_attachments/2026-07-03/demo.png")), "name": "demo.png"}],
+        )
+        assert attachment_path.exists()
+
+        updated = service.save_diary_entry(
+            "2026-07-03",
+            content="只保留文字",
+            content_html="<p>只保留文字</p>",
+            attachments_json=[],
+        )
+
+        assert updated["attachments_json"] == []
+        assert not attachment_path.exists()

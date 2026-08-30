@@ -1,5 +1,7 @@
-import sqlite3
 import json
+import re
+import sqlite3
+from html import unescape
 from datetime import datetime, date
 from pathlib import Path
 
@@ -14,6 +16,42 @@ class Database:
     # ------------------------------------------------------------------
     # Row deserialization helpers (CD-04)
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _deserialize_attachments(raw_attachments) -> list:
+        if raw_attachments in (None, ""):
+            return []
+        try:
+            parsed = json.loads(raw_attachments)
+            return parsed if isinstance(parsed, list) else []
+        except (TypeError, ValueError):
+            return []
+
+    @staticmethod
+    def _extract_plain_text_from_html(content_html: str | None) -> str:
+        html = (content_html or "").strip()
+        if not html:
+            return ""
+        html = re.sub(r"(?is)<(script|style)\b.*?>.*?</\1>", "", html)
+        text = re.sub(r"(?s)<[^>]+>", "", html)
+        return unescape(text).replace("\xa0", " ").strip()
+
+    @classmethod
+    def _has_diary_content(cls, content: str | None, content_html: str | None, attachments: list | None) -> bool:
+        if (content or "").strip():
+            return True
+        if attachments:
+            return True
+        if re.search(r"<(img|table)\b", content_html or "", flags=re.IGNORECASE):
+            return True
+        return bool(cls._extract_plain_text_from_html(content_html))
+
+    @classmethod
+    def _count_visible_characters(cls, content: str | None, content_html: str | None) -> int:
+        plain_text = (content or "").strip()
+        if not plain_text:
+            plain_text = cls._extract_plain_text_from_html(content_html)
+        return len(re.sub(r"\s+", "", plain_text)) if plain_text else 0
 
     @staticmethod
     def _deserialize_entry(row) -> dict:
@@ -39,15 +77,7 @@ class Database:
         """Convert a diary_entries row to dict with parsed JSON fields."""
         d = dict(row)
         d["tags"] = json.loads(d["tags"])
-        raw_attachments = d.get("attachments_json")
-        if raw_attachments in (None, ""):
-            d["attachments_json"] = []
-        else:
-            try:
-                parsed = json.loads(raw_attachments)
-                d["attachments_json"] = parsed if isinstance(parsed, list) else []
-            except (TypeError, ValueError):
-                d["attachments_json"] = []
+        d["attachments_json"] = Database._deserialize_attachments(d.get("attachments_json"))
         d["content_html"] = d.get("content_html") or d.get("content") or ""
         if d.get("has_rich_media") is None:
             d["has_rich_media"] = 1 if bool(d.get("content_html") and d.get("content_html") != d.get("content")) else 0
@@ -469,7 +499,7 @@ class Database:
             rich_media_flag = 1 if bool(normalized_content_html and normalized_content_html != normalized_content) or bool(attachments_list) else 0
         tags_json = json.dumps(tags or [], ensure_ascii=False)
         now = datetime.now().isoformat()
-        word_count = len(normalized_content.split()) if normalized_content else 0
+        word_count = self._count_visible_characters(normalized_content, normalized_content_html)
 
         with self._get_conn() as conn:
             conn.execute(
@@ -525,8 +555,8 @@ class Database:
     def get_diary_list_items(self):
         with self._get_conn() as conn:
             rows = conn.execute(
-                """SELECT entry_date, content, mood_score, mood_emoji,
-                          word_count, updated_at
+                """SELECT entry_date, content, content_html, attachments_json,
+                          mood_score, mood_emoji, word_count, updated_at
                    FROM diary_entries
                    ORDER BY entry_date DESC"""
             ).fetchall()
@@ -534,7 +564,13 @@ class Database:
         result = []
         for row in rows:
             item = dict(row)
-            item["has_content"] = bool((item.get("content") or "").strip())
+            attachments = self._deserialize_attachments(item.get("attachments_json"))
+            item["attachments_json"] = attachments
+            item["has_content"] = self._has_diary_content(
+                item.get("content"),
+                item.get("content_html"),
+                attachments,
+            )
             result.append(item)
         return result
 

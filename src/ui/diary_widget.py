@@ -1,7 +1,21 @@
+import shutil
+from pathlib import Path
+from uuid import uuid4
+
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QImage, QPixmap
+from PyQt6.QtGui import (
+    QFont,
+    QImage,
+    QTextBlockFormat,
+    QTextCharFormat,
+    QTextCursor,
+    QTextLength,
+    QTextListFormat,
+    QTextTableFormat,
+)
 from PyQt6.QtWidgets import (
     QComboBox,
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -33,12 +47,39 @@ _CARD_STYLE = (
     f" border-radius:8px; }}"
 )
 
+_FORMAT_BTN_STYLE = (
+    f"QPushButton {{ background:{COLORS['grey_bg']}; color:{COLORS['grey_dark']};"
+    f" border:1px solid {COLORS['grey_border']}; border-radius:5px; padding:5px 12px; font-size:12px; }}"
+    f"QPushButton:hover {{ border-color:{COLORS['primary']}; color:{COLORS['primary']}; }}"
+)
+
+_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}
+
 
 class RichDiaryTextEdit(QTextEdit):
     """允许粘贴图片和富文本的日记编辑器。"""
 
+    def __init__(self, diary_widget, parent=None):
+        super().__init__(parent)
+        self._diary_widget = diary_widget
+
+    @staticmethod
+    def _extract_local_image_paths(source) -> list[Path]:
+        image_paths: list[Path] = []
+        if source is None or not source.hasUrls():
+            return image_paths
+        for url in source.urls():
+            if not url.isLocalFile():
+                continue
+            path = Path(url.toLocalFile())
+            if path.suffix.lower() in _IMAGE_EXTENSIONS:
+                image_paths.append(path)
+        return image_paths
+
     def canInsertFromMimeData(self, source):
         if source is not None and source.hasImage():
+            return True
+        if self._extract_local_image_paths(source):
             return True
         return super().canInsertFromMimeData(source)
 
@@ -46,11 +87,18 @@ class RichDiaryTextEdit(QTextEdit):
         if source is not None and source.hasImage():
             image = source.imageData()
             if isinstance(image, QImage):
-                if hasattr(self.parent(), "_handle_pasted_image"):
-                    self.parent()._handle_pasted_image(image)
+                if hasattr(self._diary_widget, "_handle_pasted_image"):
+                    self._diary_widget._handle_pasted_image(image)
                     return
             super().insertFromMimeData(source)
             return
+        image_paths = self._extract_local_image_paths(source)
+        if image_paths and hasattr(self._diary_widget, "_handle_dropped_image_file"):
+            inserted_any = False
+            for path in image_paths:
+                inserted_any = self._diary_widget._handle_dropped_image_file(path) or inserted_any
+            if inserted_any:
+                return
         super().insertFromMimeData(source)
 
 
@@ -99,7 +147,45 @@ class DiaryWidget(QWidget):
         content_title.setStyleSheet(f"font-size:13px; font-weight:bold; color:{COLORS['grey_dark']};")
         content_layout.addWidget(content_title)
 
-        self._content_edit = RichDiaryTextEdit(self)
+        self._format_bar = QFrame()
+        format_layout = QHBoxLayout(self._format_bar)
+        format_layout.setContentsMargins(0, 0, 0, 0)
+        format_layout.setSpacing(8)
+
+        self._bold_btn = self._make_format_button("加粗", self._toggle_bold)
+        self._bullet_btn = self._make_format_button("列表", self._insert_bullet_list)
+        self._quote_btn = self._make_format_button("引用", self._insert_quote_block)
+        self._table_btn = self._make_format_button("表格", self._on_insert_table)
+        self._table_row_add_btn = self._make_format_button("行+", self._insert_table_row)
+        self._table_row_remove_btn = self._make_format_button("行-", self._remove_table_row)
+        self._table_col_add_btn = self._make_format_button("列+", self._insert_table_column)
+        self._table_col_remove_btn = self._make_format_button("列-", self._remove_table_column)
+        self._table_width_increase_btn = self._make_format_button("宽+", self._increase_table_column_width)
+        self._table_width_decrease_btn = self._make_format_button("宽-", self._decrease_table_column_width)
+        self._table_merge_btn = self._make_format_button("合并", self._merge_table_cells)
+        self._table_split_btn = self._make_format_button("拆分", self._split_table_cell)
+        self._image_btn = self._make_format_button("图片", self._on_insert_image)
+
+        for button in (
+            self._bold_btn,
+            self._bullet_btn,
+            self._quote_btn,
+            self._table_btn,
+            self._table_row_add_btn,
+            self._table_row_remove_btn,
+            self._table_col_add_btn,
+            self._table_col_remove_btn,
+            self._table_width_increase_btn,
+            self._table_width_decrease_btn,
+            self._table_merge_btn,
+            self._table_split_btn,
+            self._image_btn,
+        ):
+            format_layout.addWidget(button)
+        format_layout.addStretch()
+        content_layout.addWidget(self._format_bar)
+
+        self._content_edit = RichDiaryTextEdit(self, self._content_box)
         self._content_edit.setAcceptRichText(True)
         self._content_edit.setStyleSheet(STYLES["text_edit"])
         self._content_edit.setPlaceholderText("写下今天的工作、状态或任何值得记录的片段……")
@@ -224,29 +310,301 @@ class DiaryWidget(QWidget):
         self._dirty = False
 
     def insert_table(self, rows: int = 2, cols: int = 2):
-        table_html = "<table border='1' cellpadding='4' cellspacing='0' style='border-collapse:collapse; width:100%;'>"
-        for _ in range(rows):
-            table_html += "<tr>"
-            for _ in range(cols):
-                table_html += "<td> </td>"
-            table_html += "</tr>"
-        table_html += "</table><br>"
-        self._content_edit.insertHtml(table_html)
+        cursor = self._content_edit.textCursor()
+        table_format = QTextTableFormat()
+        table_format.setBorder(1)
+        table_format.setCellPadding(4)
+        table_format.setCellSpacing(0)
+        table_format.setWidth(QTextLength(QTextLength.Type.PercentageLength, 100))
+        table_format.setBorderStyle(QTextTableFormat.BorderStyle.BorderStyle_Solid)
+        table_format.setColumnWidthConstraints(self._build_equal_width_constraints(cols))
+        table = cursor.insertTable(rows, cols, table_format)
+        self._focus_table_cell(table, 0, 0)
+        block_format = QTextBlockFormat()
+        block_format.setTopMargin(6)
+        block_format.setBottomMargin(6)
+        end_cursor = table.lastCursorPosition()
+        end_cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock)
+        end_cursor.insertBlock(block_format)
+        self._content_edit.setTextCursor(table.cellAt(0, 0).firstCursorPosition())
+
+    def _make_format_button(self, text: str, handler):
+        button = QPushButton(text)
+        button.setStyleSheet(_FORMAT_BTN_STYLE)
+        button.clicked.connect(handler)
+        return button
+
+    def _toggle_bold(self):
+        cursor = self._content_edit.textCursor()
+        current_weight = cursor.charFormat().fontWeight()
+        next_weight = QFont.Weight.Normal if current_weight >= QFont.Weight.Bold else QFont.Weight.Bold
+        format_state = QTextCharFormat()
+        format_state.setFontWeight(next_weight)
+        cursor.mergeCharFormat(format_state)
+        self._content_edit.mergeCurrentCharFormat(format_state)
+
+    def _insert_bullet_list(self):
+        cursor = self._content_edit.textCursor()
+        cursor.insertList(QTextListFormat.Style.ListDisc)
+
+    def _insert_quote_block(self):
+        cursor = self._content_edit.textCursor()
+        if cursor.hasSelection():
+            quoted_text = cursor.selectedText().replace("\u2029", "<br>")
+            cursor.insertHtml(
+                f"<blockquote style='margin:8px 0;padding-left:12px;border-left:3px solid {COLORS['primary_light']};color:{COLORS['grey_medium']};'>{quoted_text}</blockquote>"
+            )
+            return
+        cursor.insertHtml(
+            f"<blockquote style='margin:8px 0;padding-left:12px;border-left:3px solid {COLORS['primary_light']};color:{COLORS['grey_medium']};'>引用内容</blockquote><p></p>"
+        )
+        self._content_edit.moveCursor(QTextCursor.MoveOperation.End)
+
+    def _on_insert_table(self):
+        self.insert_table()
+
+    def _current_table_context(self):
+        cursor = self._content_edit.textCursor()
+        table = cursor.currentTable()
+        if table is None:
+            return None, None
+        cell = table.cellAt(cursor)
+        if not cell.isValid():
+            return table, None
+        return table, cell
+
+    def _focus_table_cell(self, table, row: int, column: int):
+        if table is None or table.rows() <= 0 or table.columns() <= 0:
+            return
+        target_row = max(0, min(row, table.rows() - 1))
+        target_col = max(0, min(column, table.columns() - 1))
+        cell = table.cellAt(target_row, target_col)
+        if cell.isValid():
+            self._content_edit.setTextCursor(cell.firstCursorPosition())
+
+    @staticmethod
+    def _build_equal_width_constraints(column_count: int) -> list[QTextLength]:
+        if column_count <= 0:
+            return []
+        base_width = 100.0 / column_count
+        return [QTextLength(QTextLength.Type.PercentageLength, base_width) for _ in range(column_count)]
+
+    @classmethod
+    def _normalize_table_widths(cls, widths: list[float]) -> list[float]:
+        if not widths:
+            return []
+        positive_widths = [max(0.0, float(width)) for width in widths]
+        total = sum(positive_widths)
+        if total <= 0:
+            return cls._build_equal_widths(len(positive_widths))
+        return [(width / total) * 100.0 for width in positive_widths]
+
+    @classmethod
+    def _build_widths_after_column_insert(cls, widths: list[float], insert_at: int) -> list[float]:
+        if not widths:
+            return [100.0]
+
+        normalized = cls._normalize_table_widths(widths)
+        donor_index = min(max(insert_at - 1, 0), len(normalized) - 1)
+        donor_width = normalized[donor_index]
+        new_width = donor_width / 2.0
+        normalized[donor_index] = donor_width - new_width
+        normalized.insert(insert_at, new_width)
+        return cls._normalize_table_widths(normalized)
+
+    @classmethod
+    def _build_widths_after_column_remove(cls, widths: list[float], remove_at: int) -> list[float]:
+        if len(widths) <= 1:
+            return []
+
+        normalized = cls._normalize_table_widths(widths)
+        target_index = remove_at if 0 <= remove_at < len(normalized) else len(normalized) - 1
+        remaining = [width for index, width in enumerate(normalized) if index != target_index]
+        return cls._normalize_table_widths(remaining)
+
+    def _get_table_width_values(self, table) -> list[float]:
+        constraints = list(table.format().columnWidthConstraints())
+        column_count = table.columns()
+        if len(constraints) != column_count:
+            return [100.0 / column_count for _ in range(column_count)]
+
+        values = [max(0.0, float(constraint.value(100.0))) for constraint in constraints]
+        normalized = self._normalize_table_widths(values)
+        if not normalized:
+            return [100.0 / column_count for _ in range(column_count)]
+        return normalized
+
+    def _set_table_width_values(self, table, widths: list[float]):
+        if table is None or not widths:
+            return
+        table_format = table.format()
+        constraints = [QTextLength(QTextLength.Type.PercentageLength, width) for width in widths]
+        table_format.setColumnWidthConstraints(constraints)
+        table.setFormat(table_format)
+
+    def _adjust_current_column_width(self, delta: float):
+        table, cell = self._current_table_context()
+        if table is None or cell is None or table.columns() <= 1:
+            return
+
+        widths = self._get_table_width_values(table)
+        target_index = cell.column()
+        other_indexes = [index for index in range(len(widths)) if index != target_index]
+        min_width = 10.0
+
+        if delta > 0:
+            available = sum(max(0.0, widths[index] - min_width) for index in other_indexes)
+            actual_delta = min(delta, available)
+        else:
+            actual_delta = max(delta, min_width - widths[target_index])
+
+        if abs(actual_delta) < 0.01:
+            return
+
+        widths[target_index] += actual_delta
+        share = actual_delta / len(other_indexes)
+        for index in other_indexes:
+            widths[index] -= share
+
+        # Clamp and renormalize to avoid negative drift from rounding.
+        widths = [max(min_width, width) for width in widths]
+        widths = self._normalize_table_widths(widths)
+        self._set_table_width_values(table, widths)
+        self._focus_table_cell(table, cell.row(), min(target_index, table.columns() - 1))
+        self._mark_dirty()
+
+    def _insert_table_row(self):
+        table, cell = self._current_table_context()
+        if table is None:
+            return
+        row = cell.row() if cell else table.rows() - 1
+        column = cell.column() if cell else 0
+        insert_at = row + 1
+        table.insertRows(insert_at, 1)
+        self._focus_table_cell(table, insert_at, column)
+        self._mark_dirty()
+
+    def _remove_table_row(self):
+        table, cell = self._current_table_context()
+        if table is None or table.rows() <= 1:
+            return
+        row = cell.row() if cell else table.rows() - 1
+        column = cell.column() if cell else 0
+        target_row = row - 1 if row == table.rows() - 1 else row
+        table.removeRows(row, 1)
+        self._focus_table_cell(table, target_row, column)
+        self._mark_dirty()
+
+    def _insert_table_column(self):
+        table, cell = self._current_table_context()
+        if table is None:
+            return
+        widths = self._get_table_width_values(table)
+        row = cell.row() if cell else 0
+        column = cell.column() if cell else table.columns() - 1
+        insert_at = column + 1
+        table.insertColumns(insert_at, 1)
+        self._set_table_width_values(table, self._build_widths_after_column_insert(widths, insert_at))
+        self._focus_table_cell(table, row, insert_at)
+        self._mark_dirty()
+
+    def _remove_table_column(self):
+        table, cell = self._current_table_context()
+        if table is None or table.columns() <= 1:
+            return
+        widths = self._get_table_width_values(table)
+        row = cell.row() if cell else 0
+        column = cell.column() if cell else table.columns() - 1
+        target_col = column - 1 if column == table.columns() - 1 else column
+        table.removeColumns(column, 1)
+        self._set_table_width_values(table, self._build_widths_after_column_remove(widths, column))
+        self._focus_table_cell(table, row, target_col)
+        self._mark_dirty()
+
+    @staticmethod
+    def _build_equal_widths(column_count: int) -> list[float]:
+        if column_count <= 0:
+            return []
+        width = 100.0 / column_count
+        return [width for _ in range(column_count)]
+
+    def _increase_table_column_width(self):
+        self._adjust_current_column_width(10.0)
+
+    def _decrease_table_column_width(self):
+        self._adjust_current_column_width(-10.0)
+
+    def _merge_table_cells(self):
+        cursor = self._content_edit.textCursor()
+        table = cursor.currentTable()
+        if table is None or not cursor.hasSelection():
+            return
+        table.mergeCells(cursor)
+        self._mark_dirty()
+
+    def _split_table_cell(self):
+        table, cell = self._current_table_context()
+        if table is None or cell is None:
+            return
+        if cell.rowSpan() <= 1 and cell.columnSpan() <= 1:
+            return
+        table.splitCell(cell.row(), cell.column(), 1, 1)
+        self._focus_table_cell(table, cell.row(), cell.column())
+        self._mark_dirty()
+
+    def _on_insert_image(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择图片",
+            str(self.db.data_dir),
+            "Images (*.png *.jpg *.jpeg *.bmp *.gif *.webp)",
+        )
+        if path:
+            self._handle_dropped_image_file(Path(path))
 
     def _handle_pasted_image(self, image: QImage):
+        self._insert_image(image)
+
+    def _handle_dropped_image_file(self, image_path: Path) -> bool:
+        if not image_path.exists() or image_path.suffix.lower() not in _IMAGE_EXTENSIONS:
+            return False
+        self._insert_image_file(image_path)
+        return True
+
+    def _insert_image(self, image: QImage, display_name: str | None = None):
         if image.isNull():
             return
         if not self._current_date:
             return
         target_dir = self.db.data_dir / "diary_attachments" / self._current_date
         target_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"paste_{abs(hash((self._current_date, image.width(), image.height(), image.text())))}.png"
+        filename = f"img_{uuid4().hex[:12]}.png"
         path = target_dir / filename
-        image.save(str(path))
-        attachment = {"id": filename, "path": str(path), "name": filename, "mime_type": "image/png"}
+        image.save(str(path), "PNG")
+        self._append_image_attachment(path, display_name or filename, mime_type="image/png")
+
+    def _insert_image_file(self, image_path: Path):
+        if not self._current_date:
+            return
+        target_dir = self.db.data_dir / "diary_attachments" / self._current_date
+        target_dir.mkdir(parents=True, exist_ok=True)
+        suffix = image_path.suffix.lower() or ".png"
+        filename = f"img_{uuid4().hex[:12]}{suffix}"
+        target_path = target_dir / filename
+        shutil.copy2(image_path, target_path)
+        mime_type = f"image/{suffix.lstrip('.')}" if suffix != ".jpg" else "image/jpeg"
+        self._append_image_attachment(target_path, image_path.name, mime_type=mime_type)
+
+    def _append_image_attachment(self, image_path: Path, display_name: str, *, mime_type: str):
+        attachment = {
+            "id": image_path.name,
+            "path": str(image_path),
+            "name": display_name,
+            "mime_type": mime_type,
+        }
         if not any(existing.get("path") == attachment["path"] for existing in self._attachments_json):
             self._attachments_json.append(attachment)
-        self._content_edit.insertHtml(f'<img src="{path.as_posix()}" width="320"/>')
+        self._content_edit.insertHtml(f'<img src="{image_path.as_posix()}" width="320"/>')
         self._mark_dirty()
         self.save_entry(silent=True)
 

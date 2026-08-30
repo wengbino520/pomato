@@ -472,6 +472,23 @@ class TestDiaryEntries:
         assert items[0]["has_content"] is False
         assert items[1]["has_content"] is True
 
+    def test_upsert_diary_entry_counts_cjk_characters_without_whitespace(self, tmp_db):
+        entry = tmp_db.upsert_diary_entry("2026-07-03", content="今天 完成\n复盘")
+
+        assert entry["word_count"] == 6
+
+    def test_get_diary_list_items_treats_rich_media_only_entry_as_content(self, tmp_db):
+        tmp_db.upsert_diary_entry(
+            "2026-07-03",
+            content="",
+            content_html="<p><img src='C:/fake/a.png' /></p>",
+            attachments_json=[{"id": "a", "path": "C:/fake/a.png", "name": "a.png"}],
+        )
+
+        items = tmp_db.get_diary_list_items()
+
+        assert items[0]["has_content"] is True
+
 
 # ── Reminder with remind_date ──────────────────────────────────────────────────
 
