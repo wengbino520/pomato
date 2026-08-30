@@ -89,6 +89,16 @@ class DiaryHistoryWindow(QDialog):
             "font-family:Consolas,'Microsoft YaHei';font-size:13px;}"
         )
         rl.addWidget(self.preview_content, 1)
+
+        self.preview_attachments = QListWidget()
+        self.preview_attachments.setMaximumHeight(120)
+        self.preview_attachments.setStyleSheet(
+            "QListWidget{border:1px solid #eee;border-radius:4px;}"
+            "QListWidget::item{padding:6px 10px;}"
+        )
+        rl.addWidget(QLabel("附件"))
+        rl.addWidget(self.preview_attachments)
+
         splitter.addWidget(right)
         splitter.setSizes([260, 580])
 
@@ -146,7 +156,7 @@ class DiaryHistoryWindow(QDialog):
         self._refresh_preview(date_str)
 
     def _refresh_preview(self, date_str: str):
-        entry = self.db.get_diary_entry(date_str)
+        entry = self.db.get_diary_entry(date_str) or {}
         context = self.service.get_daily_context(date_str)
         self.preview_title.setText(f"📓  {date_str}")
         self.preview_meta.setText(
@@ -166,6 +176,18 @@ class DiaryHistoryWindow(QDialog):
             self.preview_content.setHtml(html_content)
         else:
             self.preview_content.setPlainText(entry.get("content") or "（仅状态记录，无正文内容）")
+        self._render_attachments(entry.get("attachments_json") or [])
+
+    def _render_attachments(self, attachments):
+        self.preview_attachments.clear()
+        if not attachments:
+            item = QListWidgetItem("（无附件）")
+            item.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.preview_attachments.addItem(item)
+            return
+        for attachment in attachments:
+            name = attachment.get("name") or attachment.get("id") or "附件"
+            self.preview_attachments.addItem(name)
 
     def _open_selected_date(self):
         if self._current_date and self._on_open_date:

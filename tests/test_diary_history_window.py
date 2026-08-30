@@ -58,3 +58,17 @@ def test_history_window_switch_selection_updates_preview(tmp_db, qapp):
     assert "前一天" in win.preview_content.toPlainText()
     assert "😐" in win.preview_meta.text()
     win.close()
+
+
+def test_history_window_shows_attachment_list_for_rich_entries(tmp_db, qapp):
+    tmp_db.upsert_diary_entry(
+        "2026-07-03",
+        content="今天的记录",
+        content_html="<p>今天的记录</p><img src='C:/fake/a.png'>",
+        attachments_json=[{"id": "a", "path": "C:/fake/a.png", "name": "a.png"}],
+    )
+    win = DiaryHistoryWindow(tmp_db, DummyConfig(), initial_date="2026-07-03")
+
+    assert win.preview_attachments.count() == 1
+    assert "a.png" in win.preview_attachments.item(0).text()
+    win.close()
