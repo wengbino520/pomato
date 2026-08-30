@@ -161,3 +161,20 @@ class TestDiaryServiceHints:
 
         assert updated["attachments_json"] == []
         assert not attachment_path.exists()
+
+    def test_save_diary_entry_accepts_serialized_attachment_json(self, tmp_db):
+        service = DiaryService(tmp_db)
+        serialized = '[{"id": "demo", "path": "diary_attachments/2026-07-03/demo.png", "name": "demo.png"}]'
+
+        entry = service.save_diary_entry(
+            "2026-07-03",
+            content="带图日记",
+            content_html='<p>带图日记</p><img src="diary_attachments/2026-07-03/demo.png">',
+            attachments_json=serialized,
+        )
+
+        assert entry["attachments_json"] == [{
+            "id": "demo",
+            "path": "diary_attachments/2026-07-03/demo.png",
+            "name": "demo.png",
+        }]

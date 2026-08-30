@@ -1,3 +1,4 @@
+import json
 import re
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -143,9 +144,17 @@ class DiaryService:
 
     @classmethod
     def _filter_attachments_for_html(cls, content_html: str | None, attachments: list | str | None) -> list[dict]:
+        attachments_list: list[dict] = []
         if isinstance(attachments, str):
-            attachments = []
-        attachments_list = list(attachments or [])
+            try:
+                parsed = json.loads(attachments)
+                if isinstance(parsed, list):
+                    attachments_list = parsed
+            except (TypeError, ValueError):
+                attachments_list = []
+        else:
+            attachments_list = list(attachments or [])
+
         if not attachments_list:
             return []
         referenced_sources = cls._extract_image_sources(content_html)
